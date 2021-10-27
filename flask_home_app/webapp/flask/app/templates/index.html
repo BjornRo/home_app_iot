@@ -1,0 +1,144 @@
+{% extends "base.html" %} {% block header %}
+<style>
+    .success {
+        color: #3d9b3f;
+        background-color: #c1e6b4;
+        border-color: #d6e9c6;
+        display: none;
+    }
+
+    .col1 {
+        width: 14rem;
+    }
+
+    .btn:focus {
+        outline: none;
+        box-shadow: none;
+    }
+</style>{% endblock %} {% block title %}{{title}}{% endblock %} {% block content %}
+
+<div class="row g-0">
+    <div class="col-2 col1">
+        <div class="card ms-2 mt-2 bg-light shadow text-center">
+            <h5 class="card-header">Air Pressure</h5>
+            <div class="card-body">
+                <p id="press" class="d-inline">{{data['kitchen/temphumidpress']['Airpressure']|round(1)}}</p>hPa
+            </div>
+        </div>
+        <div class="card ms-2 mt-2 bg-light shadow text-center">
+            <h5 class="card-header">Humidity</h5>
+            <ul class="list-group list-group-flush">
+                <li class="list-group-item">Kitchen:
+                    <p id="khumid" class="d-inline">{{data['kitchen/temphumidpress']['Humidity']|round(1)}}</p>%
+                </li>
+                <li class="list-group-item">Balcony:
+                    <p id="bhumid" class="d-inline">{{data['balcony/temphumid']['Humidity']|round(1)}}</p>%
+                </li>
+            </ul>
+        </div>
+        <div class="card ms-2 mt-2 bg-light shadow text-center">
+            <h5 class="card-header">Temperatures</h5>
+            <ul class="list-group list-group-flush">
+                <li class="list-group-item">Kitchen:
+                    <p id="ktemp" class="d-inline">{{data['kitchen/temphumidpress']['Temperature']|round(1)}}</p>°C
+                </li>
+                <li class="list-group-item">Balcony:
+                    <p id="btemp" class="d-inline">{{data['balcony/temphumid']['Temperature']|round(1)}}</p>°C
+                </li>
+                <li class="list-group-item">Outdoors:
+                    <p id="otemp" class="d-inline">{{data['bikeroom/temp']['Temperature']|round(1)}}</p>°C
+                </li>
+            </ul>
+        </div>
+    </div>
+    <div class="col col2 m-2">
+        <div class="card-group text-center" style="max-width: 24rem;">
+            <div class="card shadow" style="width:13.5rem;">
+                <div class="card-header h6 ">Full light</div>
+                <div class="card-body" id="full_light_status">{{rel_status[0]}}</div>
+            </div>
+            <div class="card shadow" style="width:13.5rem;">
+                <div class="card-header h6">Low light</div>
+                <div class="card-body" id="low_light_status">{{rel_status[1]}}</div>
+            </div>
+            <div class="card shadow" style="width:13.5rem;">
+                <div class="card-header h6">Heater</div>
+                <div class="card-body" id="heater_status">{{rel_status[2]}}</div>
+            </div>
+        </div>
+        {% if local %}
+        <div class="btn-group mt-2 shadow" role="group" style="width: 18rem;">
+            <button type="button" class="btn btn-warning cbutton" id="full_light" value="on">Full light</button>
+            <button type="button" class="btn btn-warning cbutton" id="low_light" value="on">Low light</button>
+            <button type="button" class="btn btn-warning cbutton" id="heater" value="on">Heater</button>
+        </div><br style="clear: both;">
+        <div class="btn-group mt-2 shadow" role="group" style="width: 24rem;">
+            <button type="button" class="btn btn-danger cbutton text-dark" id="full_light" value="off">Full light
+                off</button>
+            <button type="button" class="btn btn-danger cbutton text-dark" id="low_light" value="off">Low light
+                off</button>
+            <button type="button" class="btn btn-danger cbutton text-dark" id="heater" value="off">Heater off</button>
+            <button type="button" class="btn btn-danger cbutton text-dark" id="alloff" value="off">Everything
+                off</button>
+        </div>
+        <div class="card mt-2 success" style="width: 12rem;">
+            <div class="card-body h5">Command sent.</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %} {% block script %} {% if local %}
+<script type="text/javascript">
+    $(".cbutton").click(function () {
+        $.ajax({
+            type: "POST",
+            url: "{{ url_for('views.post_command') }}",
+            data: {
+                entity: $(this).attr('id'),
+                command: $(this).val()
+            },
+            success: function () {
+                $("div.success").fadeIn(300).delay(2500).fadeOut(500);
+                setTimeout(function () {
+                    $.getJSON("{{ url_for('views.home_status') }}", function (data) {
+                        get_relay_status(data);
+                    });
+                }, 500);
+            }
+        });
+        return false;
+    });
+</script>
+{% endif %}
+<script type="text/javascript">
+    setInterval(function () {
+        $.getJSON("{{ url_for('views.home_status') }}", function (data) {
+            var decimals = 1;
+            var dat = data['weather_data']
+            document.getElementById("press").innerHTML = round_decimals(dat['kitchen/temphumidpress']['Airpressure'], decimals);
+            document.getElementById("khumid").innerHTML = round_decimals(dat['kitchen/temphumidpress']['Humidity'], decimals);
+            document.getElementById("ktemp").innerHTML = round_decimals(dat['kitchen/temphumidpress']['Temperature'], decimals);
+            document.getElementById("btemp").innerHTML = round_decimals(dat['balcony/temphumid']['Temperature'], decimals);
+            document.getElementById("bhumid").innerHTML = round_decimals(dat['balcony/temphumid']['Humidity'], decimals);
+            document.getElementById("otemp").innerHTML = round_decimals(dat['bikeroom/temp']['Temperature'], decimals);
+            get_relay_status(data);
+        });
+    }, 5000);
+    function round_decimals(value, decimals) {
+        return Math.round(value * 10 * decimals) / (10 * decimals);
+    }
+    function get_relay_status(data) {
+        var i = 0;
+        ["full_light_status", "low_light_status", "heater_status"].forEach(element => {
+            var htmlelem = document.getElementById(element);
+            var boolval = data['relay_status'][i] <= 0;
+            if (boolval) htmlelem.className = "card-body bg-danger";
+            else htmlelem.className = "card-body bg-success";
+            htmlelem.innerHTML = boolval ? "Inactive" : "Active";
+            i++;
+        });
+    }
+    document.addEventListener("DOMContentLoaded", function () {
+        get_relay_status(JSON.parse('{"relay_status":{{rel_status | tojson}}}'));
+    });
+</script> {% endblock %}

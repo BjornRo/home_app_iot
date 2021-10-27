@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{title}}{% endblock %}
+{% block head %}
+{{ super() }}
+{% endblock %}
+{% block content %}
+<h2>Booking page</h2>
+<h3>{{select}}</h3>
+{% if login %}
+<form action={{dir}} method="POST">
+    <p>Time selected {{time}} at {{location}}</p>
+    <p>Username: <input type="text" name="username" /></p>
+    <p>Password: <input type="password" name="password" /></p>
+    <input type="hidden" name="book_url" value="{{book_url}}" />
+    <input type="hidden" name="location_time" value="{{time}}" />
+    <input type="hidden" name="location" value="{{time}}" />
+    <p><input type="submit" value="submit" /></p>
+    <p>
+    <h2>{{message}}</h2>
+    </p>
+</form>
+{% else %}
+{% for key,v in payload.items() %}
+<dl>
+    <dt>
+        <h4>{{key}}:</h4>
+        {% for i in v %}
+    <dd>
+        <form action={{dir}} method="POST">
+            <input type="hidden" name="{{key}}" value="{{i.0}}" />
+            <button type="submit" name="select_time" value="{{i.2}}">{{i.0}}</button>
+        </form>
+    </dd>
+    {%endfor%}
+    </dt>
+</dl>
+{%endfor%}
+{%endif%}
+
+
+{% endblock %}

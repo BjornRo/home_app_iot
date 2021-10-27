@@ -1,0 +1,71 @@
+version: '3.9'
+
+services:
+    mqtt:
+        container_name: mqtt
+        restart: always
+        build: ./mqtt
+        ports:
+            - 1883:1883
+
+    memcached:
+        container_name: memcached
+        image: memcached:alpine
+        restart: always
+
+    ddns:
+        container_name: ddns
+        restart: always
+        build: ./ddns
+        network_mode: host
+
+    sensor_logger:
+        container_name: sensor_logger
+        volumes:
+            - /home/pi/appdata:/db
+            - /home/pi/appdata/certbot/letsencrypt:/etc/letsencrypt
+            - /home/pi/appdata/certbot/www:/var/www/certbot
+        restart: always
+        build: ./sensor_logger
+        environment:
+            - TZ=Europe/Stockholm
+        depends_on:
+            - memcached
+            - mqtt
+        ports:
+            - 42661:42661
+
+    flask:
+        container_name: flask
+        restart: always
+        build: ./flask
+        command: gunicorn app.__init__:create_app() -w 4 -b 0.0.0.0:8000 #--max-requests 10
+        environment:
+            - TZ=Europe/Stockholm
+        volumes:
+            - /home/pi/appdata:/db
+        depends_on:
+            - sensor_logger
+
+    nginx:
+        container_name: nginx
+        restart: always
+        build: ./nginx
+        volumes:
+            - /home/pi/appdata/certbot/letsencrypt:/etc/letsencrypt
+            - /home/pi/appdata/certbot/www:/var/www/certbot
+        ports:
+            - 80:80
+            - 443:443
+        depends_on:
+            - flask
+        command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+
+    certbot:
+        image: certbot/certbot:arm32v6-latest
+        container_name: certbot
+        restart: always
+        volumes:
+            - /home/pi/appdata/certbot/letsencrypt:/etc/letsencrypt
+            - /home/pi/appdata/certbot/www:/var/www/certbot
+        entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew -n --webroot --webroot-path /var/www/certbot; sleep 12h & wait $${!}; done;'"
