@@ -11,19 +11,19 @@ task_times = (":30", ":00")
 
 # PATH
 DBFILE = "/db/sensor_db.db"
+DB_TABLES = "sql_db_tables.sql"
 
 
 def check_or_create_db() -> None:
     conn = sqlite3.connect(DBFILE)
     cursor = conn.cursor()
-    with open("sql_db_tables.sql", "r") as f:
+    with open(DB_TABLES, "r") as f:
         expr = f.readline()
         tmp_expr = ""
         while(expr):
             tmp_expr += expr.rstrip()
             if tmp_expr and tmp_expr[-1] == ";":
-                #cursor.execute(tmp_expr[:-1])
-                print(tmp_expr[:-1])
+                cursor.execute(tmp_expr[:-1])
                 tmp_expr = ""
             expr = f.readline()
     cursor.close()
@@ -53,7 +53,8 @@ def querydb(memcache_local: Client):
     time_now = datetime.now().isoformat("T", "minutes")
 
     # {"sensors": {location: {Device_Name: {measurement: value}}}}
-    cursor = db.cursor()
+    conn = sqlite3.connect(DBFILE)
+    cursor = conn.cursor()
     cursor.execute(f"INSERT INTO Timestamp VALUES ('{time_now}')")
     for location in memcache_local.get("sensors"):
 
