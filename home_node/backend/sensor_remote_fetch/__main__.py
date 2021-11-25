@@ -102,17 +102,6 @@ def main():
         ),
         daemon=True,
     ).start()
-    # Thread(
-    #     target=remote_fetcher,
-    #     args=(
-    #         main_node_data["remote_sh"],
-    #         main_node_new_values["remote_sh"],
-    #         memcache_local,
-    #         "remote_sh",
-    #         lock,
-    #     ),
-    #     daemon=True,
-    # ).start()
     Thread(
         target=data_socket,
         args=(
@@ -248,14 +237,6 @@ def data_socket(main_node_data, main_node_new_values, device_login, mc_local, lo
             # While connection is alive, send data. If connection is lost, then an
             # exception may be thrown and the while loop exits, and thread is destroyed.
             while 1:
-                # Datastructure: {"key": ["time", {data}]} || {"key": ["time", [data]]} || [["key", ["time", [data]]], ...]
-                # Three first bytes, \x--\x--\-- to represent length of the payload.
-                # b2 = (1_000_000 >> 16) & 0xff
-                # b1 = (1_000_000 >> 8) & 0xff
-                # b0 = (1_000_000 & 0xff)
-                # bytearray([(payload_len >> 16) & 0xff, (payload_len >> 8) & 0xff, (payload_len & 0xff)])
-                # b2, b1, b0 = list(bytearr) =>
-                # len = (b2 << 16) | (b1 << 8) | b0 --# Old algo
                 payload_len = int.from_bytes(recvall(client, 3, 3), 'big')
                 # Calculate header length.
                 if not (0 < payload_len <= MAX_PAYLOAD_SOCKET):
@@ -298,87 +279,7 @@ def data_socket(main_node_data, main_node_new_values, device_login, mc_local, lo
                 except:  # Don't care about faulty clients with no SSL wrapper.
                     pass
 
-
-"""
-def remote_fetcher(sub_node_data, sub_node_new_values, memcache, remote_key, lock):
-    def test_compare_restore(value1, value2):
-        # Get the latest value from two sources that may lag or timeout.. woohoo
-        # Test every possibility...Try catch to reduce if statements.
-        try:
-            if value1 is None:
-                value = json.loads(value2)
-            else:
-                if value2 is None:
-                    value = json.loads(value1)
-                else:
-                    value1, value2 = json.loads(value1), json.loads(value2)
-                    try:
-                        t1 = datetime.fromisoformat(value1.pop(-1))
-                        try:
-                            t2 = datetime.fromisoformat(value2.pop(-1))
-                            return [*value1, t1] if t1 >= t2 else [*value2, t2]
-                        except:
-                            return [*value1, t1]
-                    except:
-                        value = value2
-                return [*value[:2], datetime.fromisoformat(value[2])]
-        except:
-            pass
-        return None
-
-    from bmemcached import Client
-
-    memcachier1 = Client((CFG["DATA"]["server"],), CFG["DATA"]["user"], CFG["DATA"]["pass"])
-    memcachier2 = Client((CFG["DATA2"]["server"],), CFG["DATA2"]["user"], CFG["DATA2"]["pass"])
-
-    count_error = 0
-    last_update_remote = {key: datetime.now() for key in sub_node_data}
-    last_update_memcachier = datetime.now()  # Just as init
-    while 1:
-        sleep(15)
-        value = test_compare_restore(memcachier1.get(remote_key), memcachier2.get(remote_key))
-        if value is None or value[2] <= last_update_memcachier:
-            count_error += 1
-            if count_error >= 20:
-                # Set to invalid values after n attempts. Reset counter.
-                count_error = 0
-                with lock:
-                    for device, device_data in sub_node_data.items():
-                        for key in device_data:
-                            sub_node_data[device][key] = -99
-                            sub_node_new_values[device] = False
-            continue
-
-        # At this point valid value or exception thrown.
-        memcache.set("remote_sh_rawdata", (*value[:2], value[2].isoformat()))
-        last_update_memcachier = value.pop(-1)
-        count_error = 0
-
-        new_sub_node_data, data_time = value
-        for device, device_data in new_sub_node_data.items():
-            tmpdict = {}
-            # Test if new updatetime is newer than last. Otherwise continue.
-            try:
-                updatetime = datetime.fromisoformat(data_time[device])
-            except:
-                continue
-            if updatetime > last_update_remote[device]:
-                for key, value in device_data.items():
-                    if key in sub_node_data[device] and _test_value(key, value, 100):
-                        tmpdict[key] = value
-                    else:
-                        break
-                else:
-                    memcache.set(f"weather_data_{remote_key}", sub_node_data)
-                    last_update_remote[device] = updatetime
-                    with lock:
-                        sub_node_data[device].update(tmpdict)
-                        sub_node_new_values[device] = True
-"""
-
 # mqtt function does all the heavy lifting sorting out bad data.
-
-
 def schedule_setup(main_node_data: dict, main_node_new_values: dict, lock: Semaphore):
     def querydb():
         update_node = [s_node for s_node,
