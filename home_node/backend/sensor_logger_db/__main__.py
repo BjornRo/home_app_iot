@@ -4,7 +4,7 @@ from time import sleep
 from pymemcache.client.base import Client
 import schedule
 import json
-import os
+
 
 # Task every:
 task_times = (":30", ":00")
@@ -15,6 +15,11 @@ DB_TABLES = "sql_db_tables.sql"
 
 
 def check_or_create_db() -> None:
+    from os.path import isfile
+    if isfile(DB_TABLES):
+        return
+
+    # Create db file and import tables
     conn = sqlite3.connect(DBFILE)
     cursor = conn.cursor()
     with open(DB_TABLES, "r") as f:
@@ -28,6 +33,7 @@ def check_or_create_db() -> None:
             expr = f.readline()
     cursor.close()
     conn.close
+
 
 def main():
     check_or_create_db()
@@ -56,11 +62,15 @@ def querydb(memcache_local: Client):
     conn = sqlite3.connect(DBFILE)
     cursor = conn.cursor()
     cursor.execute(f"INSERT INTO Timestamp VALUES ('{time_now}')")
-    for location in memcache_local.get("sensors"):
-
-        for device, device_data in sub_node_data:
-            mkey = device.split("/")[0]
-            for table, value in device_data.items():
+    location: str
+    devices: dict
+    measurements: dict
+    mc_data: dict = memcache_local.get("sensors")
+    for location, devices in mc_data.items():
+        for device_name, measurements in devices.items():
+            for measurement_type, value in measurements.items():
+                # TODO CHECK IF any key is in the table first.
+                # Also remove data from the collected samples.
                 cursor.execute(
                     f"INSERT INTO {table} VALUES ('{mkey}', '{time_now}', {value})")
     db.commit()
