@@ -1,13 +1,10 @@
-from configparser import ConfigParser
 from datetime import datetime
 from time import sleep
-from typing import Iterable
 from ast import literal_eval
 import redis
 from redis.commands.json import JSON as REJSON_Client
 import logging
 from paho.mqtt.client import Client
-
 import json
 
 # Replace encoder to not use white space. Default to use isoformat for datetime =>
@@ -19,10 +16,13 @@ MINOR_KEYS = ("temperature", "humidity", "airpressure")
 SUB_TOPICS = ["bikeroom/temp", "balcony/temphumid", "kitchen/temphumidpress"]
 RELAY_STATUS_PATH = "balcony/relay/status"
 
+MQTT_HOST = "mqtt"
+REJSON_HOST = "rejson"
+
 
 def main():
     mqtt = Client("sensor_mqtt_logger")
-    r_conn: REJSON_Client = redis.Redis(host="localhost", port=6379, db=0).json()  # type: ignore
+    r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=0).json()  # type: ignore
 
     # Create default path
     # {"sensors": {location: {Device_Name: {measurement: value}}}}
@@ -60,7 +60,7 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client):
         topic: str = msg.topic.replace("home/", "")
         if RELAY_STATUS_PATH == topic:  # Test topic. Remove all 0,1. Set should be empty to be valid.
             if not set(listlike).difference(set((0, 1))) and len(listlike) == 4:
-                r_conn.jsonset("sensors", ".balcony.relay.status", listlike)
+                r_conn.set("sensors", ".balcony.relay.status", listlike)
             return
         iter_obj = get_iterable(listlike)
         if iter_obj is None:
@@ -69,13 +69,16 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client):
             # If a device sends bad data -> break and discard, else update
             if not _test_value(key, value):
                 break
-            r_conn.jsonset("sensors", f".balcony.{key}", value / 100)
+            r_conn.set("sensors", f".balcony.{key}", value / 100)
+        else:
+            r_conn.set("sensors", f".balcony.time", datetime.now().isoformat("T"))
+            r_conn.set("sensors", f".balcony.new", True)
 
     mqtt.on_connect = on_connect
     mqtt.on_message = on_message
     while True:
         try:  # Wait until mqtt server is connectable. No need to read exceptions here.
-            if mqtt.connect("mqtt", 1883, 60) == 0:
+            if mqtt.connect(MQTT_HOST, 1883, 60) == 0:
                 break
         except:
             pass

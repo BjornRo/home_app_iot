@@ -12,6 +12,8 @@ task_times = (":30", ":00")
 DBFILE = "/db/sensor_db.db"
 DB_TABLES = "sql_db_tables.sql"
 
+REJSON_HOST = "rejson"
+
 
 def check_or_create_db() -> None:
     from os.path import isfile
@@ -37,7 +39,7 @@ def check_or_create_db() -> None:
 def main():
     check_or_create_db()
 
-    r_conn: REJSON_Client = redis.Redis(host="localhost", port=6379, db=0).json()  # type: ignore
+    r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=0).json()  # type: ignore
     for t in task_times:
         schedule.every().hour.at(t).do(querydb, args=(r_conn,))
 
