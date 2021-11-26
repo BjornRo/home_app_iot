@@ -1,10 +1,9 @@
 import sqlite3
 from datetime import datetime
 from time import sleep
-from pymemcache.client.base import Client
+import redis
+from redis.commands.json import JSON as REJSON_Client
 import schedule
-import json
-
 
 # Task every:
 task_times = (":30", ":00")
@@ -38,15 +37,9 @@ def check_or_create_db() -> None:
 def main():
     check_or_create_db()
 
-    # Setup memcache and set initial values for memcached.
-    class JSerde(object):
-        def deserialize(self, _key, value, _flag):
-            return json.loads(value)
-
-    memcache_local = Client("memcached:11211", serde=JSerde())
-
+    r_conn: REJSON_Client = redis.Redis(host="localhost", port=6379, db=0).json()  # type: ignore
     for t in task_times:
-        schedule.every().hour.at(t).do(querydb, args=(memcache_local,))
+        schedule.every().hour.at(t).do(querydb, args=(r_conn,))
 
     while 1:
         schedule.run_pending()
@@ -55,26 +48,35 @@ def main():
             sleep(sleeptime)
 
 
-def querydb(memcache_local: Client):
+def querydb(r_conn: REJSON_Client):
     time_now = datetime.now().isoformat("T", "minutes")
 
     # {"sensors": {location: {Device_Name: {measurement: value}}}}
     conn = sqlite3.connect(DBFILE)
     cursor = conn.cursor()
     cursor.execute(f"INSERT INTO Timestamp VALUES ('{time_now}')")
-    location: str
-    devices: dict
-    measurements: dict
-    mc_data: dict = memcache_local.get("sensors")
-    for location, devices in mc_data.items():
-        for device_name, measurements in devices.items():
-            for measurement_type, value in measurements.items():
-                # TODO CHECK IF any key is in the table first.
-                # Also remove data from the collected samples.
-                cursor.execute(
-                    f"INSERT INTO {table} VALUES ('{mkey}', '{time_now}', {value})")
-    db.commit()
+    mc_data = r_conn.get("sensors")  # type:ignore
+    if isinstance(mc_data, dict):
+        mc_data: dict[str, dict]
+        for location, devices in mc_data.items():
+            cursor.execute("SELECT * FROM locations WHERE name == ?", (location,))
+            if not cursor.fetchone():
+                cursor.execute("INSERT INTO locations VALUES (?)", (location, ))
+            devices: dict[str, dict]
+            for device_name, measurements in devices.items():
+                cursor.execute("SELECT * FROM devices WHERE name == ?", (device_name,))
+                if not cursor.fetchone():
+                    cursor.execute("INSERT INTO devices VALUES (?)", (device_name, ))
+                measurements: dict[str, int | float | str]
+                for measurement_type, value in measurements.items():
+                    cursor.execute("SELECT * FROM measureTypes WHERE name == ?", (measurement_type,))
+                    if not cursor.fetchone():
+                        cursor.execute("INSERT INTO measureTypes VALUES (?)", (measurement_type, ))
+                    cursor.execute("INSERT INTO measurements VALUES (?, ?, ?, ?, ?)",
+                                   (location, device_name, measurement_type, time_now, value))
+    conn.commit()
     cursor.close()
+    conn.close()
 
 
 if __name__ == "__main__":

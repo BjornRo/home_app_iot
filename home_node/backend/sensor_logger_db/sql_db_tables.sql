@@ -7,7 +7,7 @@ CREATE TABLE measureTypes (name VARCHAR(16) PRIMARY KEY);
 CREATE TABLE timestamps (time VARCHAR(16) NOT NULL PRIMARY KEY);
 
 CREATE TABLE measurements (
-    location VARCHAR(10) NOT NULL,
+    location VARCHAR(10) NOT NULL UNIQUE,
     device VARCHAR(10) NOT NULL,
     mtype VARCHAR(10) NOT NULL,
     time VARCHAR(16) NOT NULL,

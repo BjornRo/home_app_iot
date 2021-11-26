@@ -8,9 +8,9 @@ services:
         ports:
             - 1883:1883
 
-    memcached:
-        container_name: memcached
-        image: memcached:alpine
+    rejson:
+        container_name: redis-json
+        image: redislabs/rejson:latest
         restart: always
 
     ddns:
