@@ -56,6 +56,10 @@ def querydb(r_conn: REJSON_Client):
     cursor = conn.cursor()
     cursor.execute(f"INSERT INTO Timestamp VALUES ('{time_now}')")
     mc_data = r_conn.get("sensors")  # type:ignore
+    if mc_data is None:
+        sleep(0.1)  # Try again, else let go.
+        mc_data = r_conn.get("sensors")  # type:ignore
+
     if isinstance(mc_data, dict):
         mc_data: dict[str, dict]
         for location, devices in mc_data.items():
@@ -72,6 +76,10 @@ def querydb(r_conn: REJSON_Client):
                     cursor.execute("SELECT * FROM measureTypes WHERE name == ?", (measurement_type,))
                     if not cursor.fetchone():
                         cursor.execute("INSERT INTO measureTypes VALUES (?)", (measurement_type, ))
+                    cursor.execute("SELECT * FROM deviceMeasures WHERE name == ? AND mtype = ?",
+                                   (device_name, measurement_type))
+                    if not cursor.fetchone():
+                        cursor.execute("INSERT INTO deviceMeasures VALUES (?,?)", (device_name, measurement_type))
                     cursor.execute("INSERT INTO measurements VALUES (?, ?, ?, ?, ?)",
                                    (location, device_name, measurement_type, time_now, value))
     conn.commit()

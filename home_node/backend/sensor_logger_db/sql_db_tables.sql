@@ -4,6 +4,14 @@ CREATE TABLE devices (name VARCHAR(10) PRIMARY KEY);
 
 CREATE TABLE measureTypes (name VARCHAR(16) PRIMARY KEY);
 
+CREATE TABLE deviceMeasures (
+    name VARCHAR(16),
+    mtype VARCHAR(16),
+    PRIMARY KEY (name, mtype),
+    FOREIGN KEY (name) REFERENCES devices (name),
+    FOREIGN KEY (mtype) REFERENCES measureTypes (name)
+);
+
 CREATE TABLE timestamps (time VARCHAR(16) NOT NULL PRIMARY KEY);
 
 CREATE TABLE measurements (
@@ -13,8 +21,8 @@ CREATE TABLE measurements (
     time VARCHAR(16) NOT NULL,
     value NUMERIC(2) NOT NULL,
     PRIMARY KEY (location, device, mtype, time),
-    FOREIGN KEY (location) REFERENCES Locations (name),
-    FOREIGN KEY (device) REFERENCES Devices (name),
-    FOREIGN KEY (mtype) REFERENCES MeasureTypes (name),
-    FOREIGN KEY (time) REFERENCES Timestamps (time)
+    FOREIGN KEY (location) REFERENCES locations (name),
+    FOREIGN KEY (device) REFERENCES devices (name),
+    FOREIGN KEY (mtype) REFERENCES measureTypes (name),
+    FOREIGN KEY (time) REFERENCES timestamps (time)
 );
