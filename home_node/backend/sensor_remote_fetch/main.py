@@ -183,18 +183,11 @@ def data_socket(device_login, mc_local):
                 timeout_dict[client.getpeername()[0]] = datetime.now() + timedelta(minutes=BANTIME)
                 return
             client.send(b"OK")
-            # Decide what the client wants to do.
+
+            # TODO to be removed when I start refactoring remote nodes.
+            # Now just gets data and continues. This step can be removed.
+            # If I want status, I'll add it as a json from webapp.
             recvdata = client.recv(COMMAND_LEN)
-            if recvdata == b"G":  # [G]ET
-                to_send = json.dumps(
-                    (main_node_data, time_last_update)).encode()
-                return client.sendall(compress(to_send))
-            if device_name in denylist:
-                return
-            if recvdata == b"P":  # [P]OST
-                pass
-            else:
-                return
 
             # POST => Notify that it is ok to send data now. Change timeout to keep connection alive.
             client.settimeout(60)
