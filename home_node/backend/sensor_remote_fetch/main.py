@@ -161,7 +161,7 @@ def data_socket(device_login, mc_local):
             remaining -= len(received)
         return b''.join(received_chunks)
 
-    def parse_validate(data: bytes):
+    def validate_user(data: bytes) -> str | None :
         # dataform: b"login\npassw", data may be None -> Abuse try except...
         try:
             # Malformed if 2 splits. Faster to raise except than test pw.
@@ -169,7 +169,7 @@ def data_socket(device_login, mc_local):
             device_name = device_name.decode()
             hash_passwd = device_credentials.get(device_name)
             if hash_passwd is None:
-                logging.warning(timenow() + " > An bad or adversary entity tried to connect:" + device_name)
+                logging.warning(timenow() + " > An unknown entity tried to connect:" + device_name)
             elif checkpw(passwd, hash_passwd):
                 return device_name
         except UnicodeDecodeError as e:
@@ -178,10 +178,10 @@ def data_socket(device_login, mc_local):
             logging.warning(timenow() + " > Password check failed: " + str(e))
         return None
 
-    def client_handler(client: ssl.SSLSocket):
+    def client_handler(client: ssl.SSLSocket) -> None:
         # No need for contex-manager due to always trying to close conn at the end.
         try:  # First byte msg len => read rest of msg => parse and validate.
-            device_name = parse_validate(recvall(client, ord(client.recv(1))))
+            device_name = validate_user(recvall(client, ord(client.recv(1))))
             if device_name is None:
                 global timeout_dict  # TODO
                 timeout_dict[client.getpeername()[0]] = datetime.now() + timedelta(minutes=BANTIME)
