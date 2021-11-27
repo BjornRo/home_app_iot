@@ -53,7 +53,7 @@ timeout_dict = {}
 BANTIME = 30  # minutes
 
 
-# ADD REJSON
+# TODO ADD REJSON
 
 
 def main():
@@ -112,7 +112,7 @@ def client_handler(device_cred: dict[str, bytes], client: ssl.SSLSocket) -> None
         # TODO to be removed when I start refactoring remote nodes.
         # Now just gets data and continues. This step can be removed.
         # If I want status, I'll add it as a json from webapp.
-        recvdata = client.recv(COMMAND_LEN)
+        recvdata = client.recv(1)
 
         # POST => Notify that it is ok to send data now. Change timeout to keep connection alive.
         client.settimeout(60)
