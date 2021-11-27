@@ -1,11 +1,12 @@
 from configparser import ConfigParser
 from threading import Thread, Semaphore
-from datetime import datetime
+from datetime import datetime, timedelta
 from time import sleep
 from typing import Union
 from pymemcache.client.base import PooledClient
 from bcrypt import checkpw
 from ast import literal_eval
+import logging
 import traceback
 import json
 import ssl
@@ -49,9 +50,20 @@ MAX_PAYLOAD_SOCKET = 2048
 # Socket setup
 S_PORT = 42661
 
-# Datastructure is in the form of:
-#  devicename/measurements: for each measurement type: value.
-# New value is a flag to know if value has been updated since last SQL-query. -> Each :00, :30
+# TODO real implementation.
+# {IP: Datetime(bantime)}
+timeout_dict = {}
+BANTIME = 30 # minutes
+
+USERS = ConfigParser()
+USERS.read("users.ini")
+device_credentials: dict[str, bytes]
+device_credentials = {}
+for user in USERS.sections():
+    device_credentials[user] = USERS[user]["password"].encode()
+
+def timenow() -> str:
+    return datetime.now().isoformat("T")
 
 
 def main():
@@ -72,7 +84,7 @@ def main():
             lock,
 
 
-            
+
         ),
         daemon=True,
     ).start()
@@ -150,12 +162,16 @@ def data_socket(device_login, mc_local):
         # dataform: b"login\npassw", data may be None -> Abuse try except...
         try:
             # Malformed if 2 splits. Faster to raise except than test pw.
-            device_name, passw = data.split(b'\n', 2)
-            device_name = device_name.decode()
-            if checkpw(passw, device_login[device_name]):
+            device_name, passwd = data.split(b'\n', 2)
+            hash_passwd = device_credentials.get(device_name.decode())
+            if hash_passwd is None:
+                logging.warning(timenow() + " > An bad or adversary entity tried to connect:" + device_name.decode())
+            elif checkpw(passwd, hash_passwd):
                 return device_name
-        except:
-            pass
+        except UnicodeDecodeError as e:
+            logging.warning(timenow() + " > Device name was not in utf8 codec: " + str(e))
+        except ValueError as e:
+            logging.warning(timenow() + " > Password check failed: " + str(e))
         return None
 
     def client_handler(client: ssl.SSLSocket):
@@ -163,6 +179,8 @@ def data_socket(device_login, mc_local):
         try:  # First byte msg len => read rest of msg => parse and validate.
             device_name = parse_validate(recvall(client, ord(client.recv(1))))
             if device_name is None:
+                global timeout_dict  # TODO
+                timeout_dict[client.getpeername()[0]] = datetime.now() + timedelta(minutes=BANTIME)
                 return
             client.send(b"OK")
             # Decide what the client wants to do.
@@ -219,25 +237,33 @@ def data_socket(device_login, mc_local):
             while 1:
                 try:
                     # if timeout, client is not connected.
-                    client = sslsrv.accept()[0]
+                    client, (c_ip, c_port) = sslsrv.accept()
+                    bantime: datetime | None
+                    if bantime := timeout_dict.get(c_ip):
+                        if datetime.now() > bantime:
+                            timeout_dict.pop(c_ip)
+                        else:
+                            logging.warning(f"{timenow()} > Tmp banned ip tried to connect: {c_ip}:{c_port}")
+                            client.close()
+                            continue
                     # Spawn a new thread.
-                    Thread(target=client_handler, args=(
-                        client,), daemon=True).start()
+                    Thread(target=client_handler, args=(client,), daemon=True).start()
                 except:  # Don't care about faulty clients with no SSL wrapper.
-                    pass
+                    logging.info(timenow() + " > Client tried to connect without SSL context.")
 
 
-def _test_value(key: str, value: Union[int, float], magnitude: int = 1) -> bool:
+def _test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
     try:  # Anything that isn't a number will be rejected by try.
         value *= magnitude
-        if key == "Temperature":
-            return -5000 <= value <= 6000
-        elif key == "Humidity":
-            return 0 <= value <= 10000
-        elif key == "Airpressure":
-            return 90000 <= value <= 115000
+        match key.lower():
+            case "temperature":
+                return -5000 <= value <= 6000
+            case "humidity":
+                return 0 <= value <= 10000
+            case "airpressure":
+                return 90000 <= value <= 115000
     except:
-        pass
+        logging.warning(timenow() + " > Bad key in data.")
     return False
 
 

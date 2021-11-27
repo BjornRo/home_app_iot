@@ -19,6 +19,8 @@ RELAY_STATUS_PATH = "balcony/relay/status"
 MQTT_HOST = "home.1d"
 REJSON_HOST = "rejson"
 
+def timenow() -> str:
+    return datetime.now().isoformat("T")
 
 def main():
     mqtt = Client("sensor_mqtt_log")
@@ -50,10 +52,10 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client):
             elif isinstance(listlike, (int, float)):
                 listlike = (listlike,)
             else:
-                logging.warning("Unknown type received")
+                logging.warning(timenow() + " > Unknown type received")
                 return
         except:
-            logging.warning("Bad payload received")
+            logging.warning(timenow() + " > Bad payload received")
             return
 
         # Handle the topic depending on what it is about.
@@ -81,7 +83,7 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client):
     while True:
         try:  # Wait until mqtt server is connectable. No need to read exceptions here.
             if mqtt.connect(MQTT_HOST, 1883, 60) == 0:
-                logging.info("Connected to mqtt!")
+                logging.info(timenow() + " > Connected to mqtt!")
                 break
         except:
             pass
@@ -94,7 +96,7 @@ def get_iterable(recvdata: dict | list | tuple):
         return recvdata.items()
     if isinstance(recvdata, (tuple, list)):
         return zip(MINOR_KEYS, recvdata)
-    logging.warning("Payload malformed")
+    logging.warning(timenow() + " > Payload malformed")
     return None
 
 
@@ -109,7 +111,7 @@ def _test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
             case "airpressure":
                 return 90000 <= value <= 115000
     except:
-        logging.warning("Bad key in data.")
+        logging.warning(timenow() + " > Bad key in data.")
     return False
 
 
