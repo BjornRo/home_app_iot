@@ -9,7 +9,7 @@ import schedule
 task_times = (":30", ":00")
 
 # PATH
-DBFILE = "/db/sensor_db.db"
+DBFILE = r"db\sensor_db.db"
 DB_TABLES = "sql_db_tables.sql"
 
 REJSON_HOST = "rejson"

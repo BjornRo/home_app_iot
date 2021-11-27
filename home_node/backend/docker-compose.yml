@@ -9,14 +9,17 @@ services:
   #     - 1883:1883
 
   rejson:
-    container_name: redis-json
-    image: redislabs/rejson:latest
+    container_name: rejson
+    build:
+      context: ./rejson
+      dockerfile: rejson.dockerfile
     restart: always
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
     ports:
       - 6379:6379
+    command: redis-server --loadmodule librejson.so
 
   # ddns:
   #   container_name: ddns
@@ -37,18 +40,17 @@ services:
   #   build: ./sensor_logger_db
   #   command: python3 main.py
 
-  # sensor_mqtt_listener:
-  #   container_name: sensor_mqtt_listener
-  #   #image: python:alpine
-  #   volumes:
-  #     - "/etc/timezone:/etc/timezone:ro"
-  #     - "/etc/localtime:/etc/localtime:ro"
-  #   restart: always
-  #   build: ./sensor_mqtt_listener
-  #   depends_on:
-  #     - rejson
-  #   #  - mqtt
-  #   command: python3 main.py
+  sensor_mqtt_listener:
+    container_name: sensor_mqtt_listener
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+    restart: always
+    build: ./sensor_mqtt_listener
+    depends_on:
+      - rejson
+    #  - mqtt
+    command: python3 main.py
 
   # flask:
   #   container_name: flask

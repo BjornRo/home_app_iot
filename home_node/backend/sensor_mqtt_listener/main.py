@@ -16,12 +16,12 @@ MINOR_KEYS = ("temperature", "humidity", "airpressure")
 SUB_TOPICS = ["bikeroom/temp", "balcony/temphumid", "kitchen/temphumidpress"]
 RELAY_STATUS_PATH = "balcony/relay/status"
 
-MQTT_HOST = "mqtt"
+MQTT_HOST = "home.1d"
 REJSON_HOST = "rejson"
 
 
 def main():
-    mqtt = Client("sensor_mqtt_logger")
+    mqtt = Client("sensor_mqtt_log")
     r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=0).json()  # type: ignore
 
     # Create default path
@@ -65,20 +65,22 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client):
         iter_obj = get_iterable(listlike)
         if iter_obj is None:
             return
+        sender = topic.split("/")[0]
         for key, value in iter_obj:
             # If a device sends bad data -> break and discard, else update
             if not _test_value(key, value):
                 break
-            r_conn.set("sensors", f".balcony.{key}", value / 100)
+            r_conn.set("sensors", f".{sender}.{key}", value / 100)
         else:
-            r_conn.set("sensors", f".balcony.time", datetime.now().isoformat("T"))
-            r_conn.set("sensors", f".balcony.new", True)
+            r_conn.set("sensors", f".{sender}.time", datetime.now().isoformat("T"))
+            r_conn.set("sensors", f".{sender}.new", True)
 
     mqtt.on_connect = on_connect
     mqtt.on_message = on_message
     while True:
         try:  # Wait until mqtt server is connectable. No need to read exceptions here.
             if mqtt.connect(MQTT_HOST, 1883, 60) == 0:
+                logging.info("Connected to mqtt!")
                 break
         except:
             pass
