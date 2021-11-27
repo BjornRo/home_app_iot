@@ -66,6 +66,7 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client):
         if iter_obj is None:
             return
         sender = topic.split("/")[0]
+        r_conn.set("sensors", f".{sender}", {})
         for key, value in iter_obj:
             # If a device sends bad data -> break and discard, else update
             if not _test_value(key, value):
