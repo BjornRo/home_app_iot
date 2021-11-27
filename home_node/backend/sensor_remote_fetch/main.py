@@ -1,9 +1,12 @@
 from configparser import ConfigParser
-from threading import Thread, Semaphore
+from threading import Thread
+import socket
 from datetime import datetime, timedelta
 from time import sleep
 from typing import Union
-from pymemcache.client.base import PooledClient
+import redis
+from redis.commands.json import JSON as REJSON_Client
+from zlib import decompress, compress
 from bcrypt import checkpw
 from ast import literal_eval
 import logging
@@ -163,9 +166,10 @@ def data_socket(device_login, mc_local):
         try:
             # Malformed if 2 splits. Faster to raise except than test pw.
             device_name, passwd = data.split(b'\n', 2)
-            hash_passwd = device_credentials.get(device_name.decode())
+            device_name = device_name.decode()
+            hash_passwd = device_credentials.get(device_name)
             if hash_passwd is None:
-                logging.warning(timenow() + " > An bad or adversary entity tried to connect:" + device_name.decode())
+                logging.warning(timenow() + " > An bad or adversary entity tried to connect:" + device_name)
             elif checkpw(passwd, hash_passwd):
                 return device_name
         except UnicodeDecodeError as e:
@@ -204,7 +208,7 @@ def data_socket(device_login, mc_local):
                     break
                 try:
                     recvdata = decompress(recvdata)
-                except:
+                except: # Test if data is compressed, else it is not -> ignore.
                     pass
                 parse_and_update(device_name, recvdata.decode())
         except (TypeError,):  # This should never happen.
@@ -218,9 +222,6 @@ def data_socket(device_login, mc_local):
                 client.close()
             except:
                 pass
-
-    import socket
-    from zlib import decompress, compress
 
     with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as srv:
         socket.setdefaulttimeout(2)  # For ssl handshake and auth.
