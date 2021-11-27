@@ -240,10 +240,9 @@ def data_socket(device_login, mc_local):
                             logging.warning(f"{timenow()} > Tmp banned ip tried to connect: {c_ip}:{c_port}")
                             client.close()
                             continue
-                    # Spawn a new thread.
                     Thread(target=client_handler, args=(client,), daemon=True).start()
-                except:  # Don't care about faulty clients with no SSL wrapper.
-                    logging.info(timenow() + " > Client tried to connect without SSL context.")
+                except Exception as e:  # Don't care about faulty clients with no SSL wrapper.
+                    logging.info(timenow() + " > Client tried to connect without SSL context: " + str(e))
 
 
 def _test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
