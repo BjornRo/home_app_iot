@@ -71,7 +71,7 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client):
         r_conn.set("sensors", f".{sender}", {})
         for key, value in iter_obj:
             # If a device sends bad data -> break and discard, else update
-            if not _test_value(key, value):
+            if not test_value(key, value):
                 break
             r_conn.set("sensors", f".{sender}.{key}", value / 100)
         else:
@@ -100,7 +100,7 @@ def get_iterable(recvdata: dict | list | tuple):
     return None
 
 
-def _test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
+def test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
     try:  # Anything that isn't a number will be rejected by try.
         value *= magnitude
         match key.lower():
