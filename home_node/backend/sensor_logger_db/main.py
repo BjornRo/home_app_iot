@@ -6,7 +6,7 @@ from redis.commands.json import JSON as REJSON_Client
 import schedule
 
 # Task every:
-task_times = (":30", ":00")
+TASK_TIMES = (":30", ":00")
 
 # PATH
 DBFILE = r"db\sensor_db.db"
@@ -40,7 +40,7 @@ def main():
     check_or_create_db()
 
     r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=0).json()  # type: ignore
-    for t in task_times:
+    for t in TASK_TIMES:
         schedule.every().hour.at(t).do(querydb, args=(r_conn,))
 
     while 1:
