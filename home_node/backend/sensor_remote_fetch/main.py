@@ -57,14 +57,10 @@ BANTIME = 30  # minutes
 
 
 def main():
-    USERS = ConfigParser()
-    USERS.read("users.ini")
-    device_credentials: dict[str, bytes]
-    device_credentials = {}
-    for user in USERS.sections():
-        device_credentials[user] = USERS[user]["password"].encode()
+    device_credentials = get_default_credentials()
 
     socket_handler(device_credentials, None)
+
 
 def socket_handler(device_cred: dict, mc_local):
     with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as srv:
@@ -96,7 +92,6 @@ def validate_time(prev_datetime, time) -> Union[datetime, None]:
     except:
         pass
     return None
-
 
 
 def client_handler(device_cred: dict[str, bytes], client: ssl.SSLSocket) -> None:
@@ -145,7 +140,6 @@ def client_handler(device_cred: dict[str, bytes], client: ssl.SSLSocket) -> None
             pass
 
 
-
 def parse_and_update(device_name: str, payload: str) -> None:
     update_cache = False
     try:  # First test if it's a valid json object
@@ -186,6 +180,7 @@ def parse_and_update(device_name: str, payload: str) -> None:
         mc_local.set("weather_data_" + device_name,
                      main_node_data[device_name])
 
+
 def recvall(client, size, buf_size=4096):
     received_chunks = []
     remaining = size
@@ -215,6 +210,7 @@ def validate_user(device_cred: dict[str, bytes], data: bytes) -> str | None:
         logging.warning(timenow() + " > Password check failed: " + str(e))
     return None
 
+
 def test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
     try:  # Anything that isn't a number will be rejected by try.
         value *= magnitude
@@ -229,8 +225,16 @@ def test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
         logging.warning(timenow() + " > Bad key in data.")
     return False
 
+
+def get_default_credentials() -> dict[str, bytes]:
+    USERS = ConfigParser()
+    USERS.read("users.ini")
+    return {usr: USERS[usr]["password"].encode() for usr in USERS.sections()}
+
+
 def timenow() -> str:
     return datetime.now().isoformat("T")
+
 
 if __name__ == "__main__":
     main()

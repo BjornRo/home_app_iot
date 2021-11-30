@@ -19,21 +19,33 @@ RELAY_STATUS_PATH = "balcony/relay/status"
 MQTT_HOST = "home.1d"
 REJSON_HOST = "rejson"
 
+
 def timenow() -> str:
     return datetime.now().isoformat("T")
+
+
+def set_json(r_conn: REJSON_Client, path: str, elem, key="sensors"):
+    # I could not think of another solution though :)
+    pathkeys = path.split(".")[:0:-1]
+    rebuild_path = ""
+    if r_conn.get(key, ".") is None:
+        r_conn.set(key, ".", {})
+    while(i := pathkeys.pop()):
+        rebuild_path += "." + i
+        if pathkeys and r_conn.get(key, rebuild_path) is None:
+            r_conn.set(key, rebuild_path, {})
+    r_conn.set(key, rebuild_path, elem)
+
 
 def main():
     mqtt = Client("sensor_mqtt_log")
     r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=0).json()  # type: ignore
 
-    # Create default path
+    # Create default path if redis cache doesnt exist
     # {"sensors": {location: {Device_Name: {measurement: value}}}}
-    if r_conn.get("sensors") is None:
-        r_conn.set("sensors", ".", {})
     for i in SUB_TOPICS:
-        r_conn.set("sensors", "." + i.split("/")[0], {})
-    r_conn.set("sensors", ".balcony.relay", {})
-    r_conn.set("sensors", ".balcony.relay.status", {})
+        set_json(r_conn, ".home." + i.split("/")[0], {})
+    set_json(r_conn, ".home.balcony.relay", {})
 
     mqtt_agent(mqtt, r_conn)
 
@@ -62,21 +74,20 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client):
         topic: str = msg.topic.replace("home/", "")
         if RELAY_STATUS_PATH == topic:  # Test topic. Remove all 0,1. Set should be empty to be valid.
             if not set(listlike).difference(set((0, 1))) and len(listlike) == 4:
-                r_conn.set("sensors", ".balcony.relay.status", listlike)
+                set_json(r_conn, ".home.balcony.relay.status", listlike)
             return
         iter_obj = get_iterable(listlike)
         if iter_obj is None:
             return
         sender = topic.split("/")[0]
-        r_conn.set("sensors", f".{sender}", {})
         for key, value in iter_obj:
             # If a device sends bad data -> break and discard, else update
             if not test_value(key, value):
                 break
-            r_conn.set("sensors", f".{sender}.{key}", value / 100)
+            set_json(r_conn, f".home.{sender}.{key}", value / 100)
         else:
-            r_conn.set("sensors", f".{sender}.time", datetime.now().isoformat("T"))
-            r_conn.set("sensors", f".{sender}.new", True)
+            set_json(r_conn, f".home.{sender}.time", datetime.now().isoformat("T"))
+            set_json(r_conn, f".home.{sender}.new", True)
 
     mqtt.on_connect = on_connect
     mqtt.on_message = on_message

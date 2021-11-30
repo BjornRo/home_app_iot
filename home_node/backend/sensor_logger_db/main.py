@@ -20,7 +20,7 @@ def check_or_create_db() -> None:
     if isfile(DB_TABLES):
         return
 
-    # Create db file and import tables
+    # Create db file and import tables, this assumes ; is on its own line.
     conn = sqlite3.connect(DBFILE)
     cursor = conn.cursor()
     with open(DB_TABLES, "r") as f:
@@ -69,21 +69,21 @@ def querydb(r_conn: REJSON_Client):
             if not cursor.fetchone():
                 cursor.execute("INSERT INTO locations VALUES (?)", (location, ))
             devices: dict[str, dict]
-            for device_name, measurements in devices.items():
-                cursor.execute("SELECT * FROM devices WHERE name == ?", (device_name,))
+            for sender, measurements in devices.items():
+                cursor.execute("SELECT * FROM devices WHERE name == ?", (sender,))
                 if not cursor.fetchone():
-                    cursor.execute("INSERT INTO devices VALUES (?)", (device_name, ))
+                    cursor.execute("INSERT INTO devices VALUES (?)", (sender, ))
                 measurements: dict[str, int | float | str]
                 for measurement_type, value in measurements.items():
                     cursor.execute("SELECT * FROM measureTypes WHERE name == ?", (measurement_type,))
                     if not cursor.fetchone():
                         cursor.execute("INSERT INTO measureTypes VALUES (?)", (measurement_type, ))
                     cursor.execute("SELECT * FROM deviceMeasures WHERE name == ? AND mtype = ?",
-                                   (device_name, measurement_type))
+                                   (sender, measurement_type))
                     if not cursor.fetchone():
-                        cursor.execute("INSERT INTO deviceMeasures VALUES (?,?)", (device_name, measurement_type))
+                        cursor.execute("INSERT INTO deviceMeasures VALUES (?,?)", (sender, measurement_type))
                     cursor.execute("INSERT INTO measurements VALUES (?, ?, ?, ?, ?)",
-                                   (location, device_name, measurement_type, time_now, value))
+                                   (location, sender, measurement_type, time_now, value))
     conn.commit()
     cursor.close()
     conn.close()
