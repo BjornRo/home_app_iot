@@ -172,51 +172,50 @@ def parse_and_update(r_conn: REJSON_Client, location_name: str, payload: str) ->
             logging.info(timenow() + " > Time conversion (str -> dt) failed: " + str(e))
         return None
 
-    update_cache = False
-    try:  # First test if it's a valid json object
-        data = json.loads(payload)
-    except:  # Else fallback to literal eval
-        data = literal_eval(payload)
+    # [[key, [temp,2]] , [him,2]]
+    def get_dict(data: dict | list | tuple) -> dict | None:
+        if isinstance(data, dict):
+            return data
+        if isinstance(data, (tuple, list)):
+            try:
+                return {k.lower(): v for k, v in data}
+            except:
+                logging.info(timenow() + " > Parsed data is not a list of lists: " + str(data))
+                return None
+        logging.warning(timenow() + " > Payload malformed: " + str(data))
+        return None
 
-    if isinstance(data, dict):
-        data = data.items()  # type:ignore
-    elif isinstance(data, (list, tuple)):
-        if not isinstance(data[0], (list, tuple)):
-            logging.info(timenow() + " > Parsed data is not a list of lists: " + str(data))
-            return False
-    else:
-        logging.info(timenow() + " > Parsed data is malformed or unknown: " + str(data))
+    try:  # First test if it's a valid json object
+        remote_data = json.loads(payload)
+    except:  # Else fallback to literal eval
+        remote_data = literal_eval(payload)
+
+    remote_data = get_dict(remote_data)
+    if remote_data is None:
         return False
 
     device_key: str
     new_time: str
-    data: dict
+    dev_data: dict
     # {'pizw/temp': (None, {'Temperature': -99}),
     # 'hydrofor/temphumidpress': (None, {'Temperature': -99, 'Humidity': -99, 'Airpressure': -99})}
-    for device_key, (new_time, data) in data:
+    for device_key, (new_time, dev_data) in remote_data.items():
+        device_key = device_key.lower()
+        location_name = location_name.lower()
         dt_time = validate_time(r_conn, f".{location_name}.{device_key}.time", new_time)
         if dt_time is None:
             continue
-        iter_obj = get_iterable(
-            data, main_node_data[device_name][device_key])
+        iter_obj = get_dict(dev_data)
         if iter_obj is None:
             continue
-        tmpdata = {}
-        for data_key, value in iter_obj:
+        for data_key, value in iter_obj.items():
             if not test_value(data_key, value, 100):
-                break
-            tmpdata[data_key] = value
+                continue
+            set_json(r_conn, f".{location_name}.{device_key}.{data_key}", value)
         else:
-            with lock:
-                main_node_data[device_name][device_key] |= tmpdata
-                main_node_new_values[device_name][device_key] = True
-            time_last_update[device_name][device_key] = dt_time
-            update_cache = True
-    if update_cache:
-        mc_local.set(
-            f"weather_data_{device_name}_time", time_last_update[device_name])
-        mc_local.set("weather_data_" + device_name,
-                     main_node_data[device_name])
+            set_json(r_conn, f".{location_name}.{device_key}.time", datetime.now().isoformat("T"))
+            set_json(r_conn, f".{location_name}.{device_key}.new", True)
+    return True
 
 
 def test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
