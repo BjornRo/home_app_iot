@@ -215,7 +215,8 @@ def parse_and_update(r_conn: REJSON_Client, location_name: str, payload: str) ->
         else:
             set_json(r_conn, f".{location_name}.{device_key}.time", datetime.now().isoformat("T"))
             set_json(r_conn, f".{location_name}.{device_key}.new", True)
-    return True
+            return True
+    return False
 
 
 def test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
