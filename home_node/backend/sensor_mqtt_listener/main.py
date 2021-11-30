@@ -24,17 +24,17 @@ def timenow() -> str:
     return datetime.now().isoformat("T")
 
 
-def set_json(r_conn: REJSON_Client, path: str, elem, key="sensors"):
+def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors"):
     # I could not think of another solution though :)
     pathkeys = path.split(".")[:0:-1]
     rebuild_path = ""
-    if r_conn.get(key, ".") is None:
-        r_conn.set(key, ".", {})
+    if r_conn.get(rootkey, ".") is None:
+        r_conn.set(rootkey, ".", {})
     while(i := pathkeys.pop()):
         rebuild_path += "." + i
-        if pathkeys and r_conn.get(key, rebuild_path) is None:
-            r_conn.set(key, rebuild_path, {})
-    r_conn.set(key, rebuild_path, elem)
+        if pathkeys and r_conn.get(rootkey, rebuild_path) is None:
+            r_conn.set(rootkey, rebuild_path, {})
+    r_conn.set(rootkey, rebuild_path, elem)
 
 
 def main():
