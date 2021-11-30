@@ -3,7 +3,6 @@ from threading import Thread
 import socket
 from datetime import datetime, timedelta
 from time import sleep
-from typing import Union
 import redis
 from redis.commands.json import JSON as REJSON_Client
 from zlib import decompress, compress
@@ -20,19 +19,10 @@ import sys
 json._default_encoder = json.JSONEncoder(  # type: ignore
     separators=(",", ":"), default=lambda dt: dt.isoformat())
 
-# Some imports are put into the function that require that module.
-#   These modules are loaded before function-loop.
-
-# Idea is to keep this as threading and remote_docker/sensor_logger as asyncio
-# This is to compare the flavours of concurrency.
-
-# MISC
-MINOR_KEYS = ("Temperature", "Humidity", "Airpressure")
 
 # Config reader -- Path(__file__).parent.absolute() /
 CFG = ConfigParser()
 CFG.read("config.ini")
-JSONDATAFILE = "remotedata.json"
 
 # SSL Context
 HOSTNAME = CFG["CERT"]["url"]
@@ -46,25 +36,44 @@ MAX_PAYLOAD_SOCKET = 2048
 
 # Socket setup
 S_PORT = 42661
+BAN_TIME = 30  # minutes
+MAX_ATTEMPTS = 10
 
-# TODO real implementation.
-# {IP: Datetime(bantime)}
-timeout_dict = {}
-BANTIME = 30  # minutes
-
-
-# TODO ADD REJSON
+# MISC
+MINOR_KEYS = ("temperature", "humidity", "airpressure")
+MQTT_HOST = "home.1d"
+REJSON_HOST = "rejson"
 
 
 def main():
+    r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=0).json()  # type: ignore
     device_credentials = get_default_credentials()
+    socket_handler(device_credentials, r_conn)
 
-    socket_handler(device_credentials, None)
 
+def socket_handler(device_cred: dict, r_conn: REJSON_Client):
+    def is_client_allowed(block_dict: dict[str, dict], ip_addr: str, port):
+        bantime: datetime
+        user_data = block_dict.get(ip_addr)
+        if user_data is not None:
+            bantime = user_data.get("time")  # type:ignore
+            if datetime.now() > bantime:
+                block_dict.pop(ip_addr)
+            else:
+                attempts: int = user_data["attempts"] + 1
+                if attempts >= MAX_ATTEMPTS:
+                    user_data["bantime"] = datetime.now() + timedelta(minutes=BAN_TIME*attempts*5)
+                    attempts -= 1
+                elif attempts >= MAX_ATTEMPTS/2:
+                    user_data["bantime"] = datetime.now() + timedelta(minutes=BAN_TIME*attempts*2)
+                user_data["attempts"] = attempts
+                logging.warning(f"{timenow()} > Tmp banned ip tried to connect: {ip_addr}:{port}")
+                return False
+        return True
 
-def socket_handler(device_cred: dict, mc_local):
+    block_dict = {}
     with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as srv:
-        socket.setdefaulttimeout(2)  # For ssl handshake and auth.
+        socket.setdefaulttimeout(3)  # For ssl handshake and auth.
         srv.bind(("", S_PORT))
         srv.listen(8)
         with context.wrap_socket(srv, server_side=True) as sslsrv:
@@ -72,43 +81,47 @@ def socket_handler(device_cred: dict, mc_local):
                 try:
                     # if timeout, client is not connected.
                     client, (c_ip, c_port) = sslsrv.accept()
-                    bantime: datetime | None
-                    if bantime := timeout_dict.get(c_ip):
-                        if datetime.now() > bantime:
-                            timeout_dict.pop(c_ip)
-                        else:
-                            logging.warning(f"{timenow()} > Tmp banned ip tried to connect: {c_ip}:{c_port}")
-                            client.close()
-                            continue
-                    Thread(target=client_handler, args=(device_cred, client), daemon=True).start()
+                    if is_client_allowed(block_dict, c_ip, c_port):
+                        Thread(target=client_handler, args=(block_dict, r_conn, device_cred, client), daemon=True).start()
                 except Exception as e:  # Don't care about faulty clients with no SSL wrapper.
                     logging.info(timenow() + " > Client tried to connect without SSL context: " + str(e))
 
 
-def validate_time(prev_datetime, time) -> Union[datetime, None]:
-    try:  # All exceptions should be silenced.
-        if prev_datetime < (dt := datetime.fromisoformat(time)):
-            return dt
-    except:
-        pass
-    return None
+def client_handler(block_dict: dict[str, dict], r_conn: REJSON_Client, device_cred: dict[str, bytes], client: ssl.SSLSocket) -> None:
+    def recvall(client:  ssl.SSLSocket, size, buf_size=4096) -> bytes:
+        received_chunks = []
+        remaining = size
+        while remaining > 0:
+            received = client.recv(min(remaining, buf_size))
+            if not received:
+                return b''
+            received_chunks.append(received)
+            remaining -= len(received)
+        return b''.join(received_chunks)
 
+    def validate_user(device_cred: dict[str, bytes], data: bytes) -> str | None:
+        # dataform: b"login\npassw", data may be None -> Abuse try except...
+        try:
+            # Malformed if 2 splits. Faster to raise except than test pw.
+            device_name, passwd = data.split(b'\n', 2)
+            device_name = device_name.decode()
+            hash_passwd = device_cred.get(device_name)
+            if hash_passwd is None:
+                logging.warning(timenow() + " > An unknown entity tried to connect:" + device_name)
+            elif checkpw(passwd, hash_passwd):
+                return device_name
+        except UnicodeDecodeError as e:
+            logging.warning(timenow() + " > Device name was not in utf8 codec: " + str(e))
+        except ValueError as e:
+            logging.warning(timenow() + " > Password check failed: " + str(e))
+        return None
 
-def client_handler(device_cred: dict[str, bytes], client: ssl.SSLSocket) -> None:
     # No need for contex-manager due to always trying to close conn at the end.
     try:  # First byte msg len => read rest of msg => parse and validate.
-        device_name = validate_user(device_cred, recvall(client, ord(client.recv(1))))
-        if device_name is None:
-            global timeout_dict  # TODO
-            timeout_dict[client.getpeername()[0]] = datetime.now() + timedelta(minutes=BANTIME)
+        location_name = validate_user(device_cred, recvall(client, ord(client.recv(1))))
+        if location_name is None:
+            block_dict[client.getpeername()[0]] = {"time": datetime.now() + timedelta(minutes=BAN_TIME), "attempts": 1}
             return
-        client.send(b"OK")
-
-        # TODO to be removed when I start refactoring remote nodes.
-        # Now just gets data and continues. This step can be removed.
-        # If I want status, I'll add it as a json from webapp.
-        recvdata = client.recv(1)
-
         # POST => Notify that it is ok to send data now. Change timeout to keep connection alive.
         client.settimeout(60)
         client.send(b"OK")
@@ -126,21 +139,39 @@ def client_handler(device_cred: dict[str, bytes], client: ssl.SSLSocket) -> None
                 recvdata = decompress(recvdata)
             except:  # Test if data is compressed, else it is not -> ignore.
                 pass
-            parse_and_update(device_name, recvdata.decode())
+            if not parse_and_update(r_conn, location_name, recvdata.decode()):
+                break
     except (TypeError,):  # This should never happen.
         traceback.print_exc()
-    except (socket.timeout,):  # This will happen alot. Don't care
-        pass
+    except (socket.timeout,) as e:  # This will happen alot. Don't care
+        logging.info(timenow() + " > Socket timeout: " + str(e))
     except Exception as e:  # Just to log if any less important exceptions are raised
-        print(e, file=sys.stderr)
-    finally:
+        logging.info(timenow() + " > Exception from client handler: " + str(e))
+    try:
+        client.close()
+    except:
+        pass
+
+
+def parse_and_update(r_conn: REJSON_Client, location_name: str, payload: str) -> bool:
+    def validate_time(r_conn: REJSON_Client, r_conn_path: str, new_time: str) -> datetime | None:
         try:
-            client.close()
-        except:
-            pass
+            new_dt = datetime.fromisoformat(new_time)
+            old_time: str | None = r_conn.get("sensors", r_conn_path)
+            if old_time is None:
+                set_json(r_conn, r_conn_path, new_dt)
+                return new_dt
+            old_dt = datetime.fromisoformat(old_time)
+            if old_dt < new_dt:
+                return new_dt
+            else:
+                logging.info(timenow() + " > Old data sent: " + new_time)
+        except Exception as e:
+            logging.info(timenow() + " > Time validation failed: " + str(e))
+        except ValueError as e:
+            logging.info(timenow() + " > Time conversion (str -> dt) failed: " + str(e))
+        return None
 
-
-def parse_and_update(device_name: str, payload: str) -> None:
     update_cache = False
     try:  # First test if it's a valid json object
         data = json.loads(payload)
@@ -148,15 +179,22 @@ def parse_and_update(device_name: str, payload: str) -> None:
         data = literal_eval(payload)
 
     if isinstance(data, dict):
-        data = data.items()
+        data = data.items()  # type:ignore
     elif isinstance(data, (list, tuple)):
         if not isinstance(data[0], (list, tuple)):
-            raise Exception("Parsed data is not a list of lists.")
+            logging.info(timenow() + " > Parsed data is not a list of lists: " + str(data))
+            return False
     else:
-        return
-    for device_key, (time, data) in data:
-        dt_time = validate_time(
-            time_last_update[device_name][device_key], time)
+        logging.info(timenow() + " > Parsed data is malformed or unknown: " + str(data))
+        return False
+
+    device_key: str
+    new_time: str
+    data: dict
+    # {'pizw/temp': (None, {'Temperature': -99}),
+    # 'hydrofor/temphumidpress': (None, {'Temperature': -99, 'Humidity': -99, 'Airpressure': -99})}
+    for device_key, (new_time, data) in data:
+        dt_time = validate_time(r_conn, f".{location_name}.{device_key}.time", new_time)
         if dt_time is None:
             continue
         iter_obj = get_iterable(
@@ -181,36 +219,6 @@ def parse_and_update(device_name: str, payload: str) -> None:
                      main_node_data[device_name])
 
 
-def recvall(client, size, buf_size=4096):
-    received_chunks = []
-    remaining = size
-    while remaining > 0:
-        received = client.recv(min(remaining, buf_size))
-        if not received:
-            return b''
-        received_chunks.append(received)
-        remaining -= len(received)
-    return b''.join(received_chunks)
-
-
-def validate_user(device_cred: dict[str, bytes], data: bytes) -> str | None:
-    # dataform: b"login\npassw", data may be None -> Abuse try except...
-    try:
-        # Malformed if 2 splits. Faster to raise except than test pw.
-        device_name, passwd = data.split(b'\n', 2)
-        device_name = device_name.decode()
-        hash_passwd = device_cred.get(device_name)
-        if hash_passwd is None:
-            logging.warning(timenow() + " > An unknown entity tried to connect:" + device_name)
-        elif checkpw(passwd, hash_passwd):
-            return device_name
-    except UnicodeDecodeError as e:
-        logging.warning(timenow() + " > Device name was not in utf8 codec: " + str(e))
-    except ValueError as e:
-        logging.warning(timenow() + " > Password check failed: " + str(e))
-    return None
-
-
 def test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
     try:  # Anything that isn't a number will be rejected by try.
         value *= magnitude
@@ -233,7 +241,20 @@ def get_default_credentials() -> dict[str, bytes]:
 
 
 def timenow() -> str:
-    return datetime.now().isoformat("T")
+    return datetime.now().isoformat("T")[:22]
+
+
+def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors"):
+    # I could not think of another solution though :)
+    pathkeys = path.split(".")[:0:-1]
+    rebuild_path = ""
+    if r_conn.get(rootkey, ".") is None:
+        r_conn.set(rootkey, ".", {})
+    while(i := pathkeys.pop()):
+        rebuild_path += "." + i
+        if pathkeys and r_conn.get(rootkey, rebuild_path) is None:
+            r_conn.set(rootkey, rebuild_path, {})
+    r_conn.set(rootkey, rebuild_path, elem)
 
 
 if __name__ == "__main__":

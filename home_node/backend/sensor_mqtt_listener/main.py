@@ -21,7 +21,7 @@ REJSON_HOST = "rejson"
 
 
 def timenow() -> str:
-    return datetime.now().isoformat("T")
+    return datetime.now().isoformat("T")[:22]
 
 
 def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors"):
