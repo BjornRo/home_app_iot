@@ -2,9 +2,10 @@ from configparser import ConfigParser
 from pathlib import Path
 from time import sleep
 import netifaces
+import argparse
 import requests
 import logging
-import argparse
+
 
 parser = argparse.ArgumentParser(description='Settings for time delay')
 parser.add_argument("device", type=str, help="Device to track, eth0, wlan0 etc...")

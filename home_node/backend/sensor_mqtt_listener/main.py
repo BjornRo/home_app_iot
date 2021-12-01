@@ -1,10 +1,11 @@
-from datetime import datetime
-from time import sleep
-from ast import literal_eval
-import redis
 from redis.commands.json import JSON as REJSON_Client
-import logging
 from paho.mqtt.client import Client
+from datetime import datetime
+from ast import literal_eval
+from time import sleep
+import argparse
+import logging
+import redis
 import json
 
 # Replace encoder to not use white space. Default to use isoformat for datetime =>
@@ -16,9 +17,25 @@ MINOR_KEYS = ("temperature", "humidity", "airpressure")
 SUB_TOPICS = ["bikeroom/temp", "balcony/temphumid", "kitchen/temphumidpress"]
 RELAY_STATUS_PATH = "balcony/relay/status"
 
+# Misc
 MQTT_HOST = "home.1d"
 REJSON_HOST = "rejson"
 
+##
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    '-d', '--debug',
+    help="Print lots of debugging statements",
+    action="store_const", dest="loglevel", const=logging.DEBUG,
+    default=logging.WARNING,
+)
+parser.add_argument(
+    '-v', '--verbose',
+    help="Be verbose",
+    action="store_const", dest="loglevel", const=logging.INFO,
+)
+args = parser.parse_args()
+logging.basicConfig(level=args.loglevel)
 
 def timenow() -> str:
     return datetime.now().isoformat("T")[:22]

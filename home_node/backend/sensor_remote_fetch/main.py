@@ -1,24 +1,22 @@
+from redis.commands.json import JSON as REJSON_Client
+from datetime import datetime, timedelta
 from configparser import ConfigParser
 from threading import Thread
-import socket
-from datetime import datetime, timedelta
-from time import sleep
-import redis
-from redis.commands.json import JSON as REJSON_Client
-from zlib import decompress, compress
-from bcrypt import checkpw
 from ast import literal_eval
-import logging
+from zlib import decompress
+from bcrypt import checkpw
 import traceback
+import argparse
+import logging
+import socket
+import redis
 import json
 import ssl
-import sys
 
 # Replace encoder to not use white space. Default to use isoformat for datetime =>
 #   Since I know the types I'm dumping. If needed custom encoder or an "actual" default function.
 json._default_encoder = json.JSONEncoder(  # type: ignore
     separators=(",", ":"), default=lambda dt: dt.isoformat())
-
 
 # Config reader -- Path(__file__).parent.absolute() /
 CFG = ConfigParser()
@@ -37,12 +35,27 @@ MAX_PAYLOAD_SOCKET = 2048
 # Socket setup
 S_PORT = 42661
 BAN_TIME = 30  # minutes
-MAX_ATTEMPTS = 10
+MAX_ATTEMPTS = 5
 
 # MISC
-MINOR_KEYS = ("temperature", "humidity", "airpressure")
 MQTT_HOST = "home.1d"
 REJSON_HOST = "rejson"
+
+##
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    '-d', '--debug',
+    help="Print lots of debugging statements",
+    action="store_const", dest="loglevel", const=logging.DEBUG,
+    default=logging.WARNING,
+)
+parser.add_argument(
+    '-v', '--verbose',
+    help="Be verbose",
+    action="store_const", dest="loglevel", const=logging.INFO,
+)
+args = parser.parse_args()
+logging.basicConfig(level=args.loglevel)
 
 
 def main():
@@ -235,9 +248,7 @@ def test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
 
 
 def get_default_credentials() -> dict[str, bytes]:
-    USERS = ConfigParser()
-    USERS.read("users.ini")
-    return {usr: USERS[usr]["password"].encode() for usr in USERS.sections()}
+    return {usr: CFG[usr]["password"].encode() for usr in CFG.sections() if not "cert" == usr.lower()}
 
 
 def timenow() -> str:

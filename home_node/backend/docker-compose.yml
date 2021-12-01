@@ -21,24 +21,26 @@ services:
       - 6379:6379
     command: redis-server --loadmodule librejson.so
 
-  # ddns:
-  #   container_name: ddns
-  #   #image: python:alpine
-  #   restart: always
-  #   build: ./ddns
-  #   command: python3 main.py wlan0 --hrs 2
-  #   network_mode: host
+  ddns:
+    container_name: ddns
+    restart: always
+    build:
+      context: ./ddns
+      dockerfile: ddns.dockerfile
+    command: python3 main.py wlan0 --hrs 2
+    network_mode: host
 
-  # sensor_logger_db:
-  #   container_name: sensor_logger_db
-  #   #image: python:alpine
-  #   volumes:
-  #     - /home/pi/appdata/db:/db
-  #     - "/etc/timezone:/etc/timezone:ro"
-  #     - "/etc/localtime:/etc/localtime:ro"
-  #   restart: always
-  #   build: ./sensor_logger_db
-  #   command: python3 main.py
+  sensor_logger_db:
+    container_name: sensor_logger_db
+    volumes:
+      - ./appdata/db:/db
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+    restart: always
+    build:
+      context: ./sensor_logger_db
+      dockerfile: sensor_logger_db.dockerfile
+    command: python3 main.py --verbose
 
   sensor_mqtt_listener:
     container_name: sensor_mqtt_listener
@@ -46,11 +48,27 @@ services:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
     restart: always
-    build: ./sensor_mqtt_listener
+    build:
+      context: ./sensor_mqtt_listener
+      dockerfile: sensor_mqtt_listener.dockerfile
     depends_on:
       - rejson
     #  - mqtt
-    command: python3 main.py
+    command: python3 main.py --verbose
+
+  sensor_remote_fetch:
+    container_name: sensor_remote_fetch
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+    restart: always
+    build:
+      context: ./sensor_remote_fetch
+      dockerfile: sensor_remote_fetch.dockerfile
+    depends_on:
+      - rejson
+    #  - mqtt
+    command: python3 main.py --verbose
 
   # flask:
   #   container_name: flask
@@ -69,8 +87,8 @@ services:
   #   restart: always
   #   build: ./nginx
   #   volumes:
-  #     - /home/pi/appdata/certbot/letsencrypt:/etc/letsencrypt
-  #     - /home/pi/appdata/certbot/www:/var/www/certbot
+  #     - ./appdata/certbot/letsencrypt:/etc/letsencrypt
+  #     - ./appdata/certbot/www:/var/www/certbot
   #   ports:
   #     - 80:80
   #     - 443:443
@@ -78,11 +96,11 @@ services:
   #     - flask
   #   command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
 
-  # certbot:
-  #   image: certbot/certbot:arm32v6-latest
-  #   container_name: certbot
-  #   restart: always
-  #   volumes:
-  #     - /home/pi/appdata/certbot/letsencrypt:/etc/letsencrypt
-  #     - /home/pi/appdata/certbot/www:/var/www/certbot
-  #   entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew -n --webroot --webroot-path /var/www/certbot; sleep 12h & wait $${!}; done;'"
+  certbot:
+    image: certbot/certbot:latest
+    container_name: certbot
+    restart: always
+    volumes:
+      - ./appdata/certbot/letsencrypt:/etc/letsencrypt
+      - ./appdata/certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew -n --webroot --webroot-path /var/www/certbot; sleep 12h & wait $${!}; done;'"
