@@ -70,17 +70,17 @@ services:
     #  - mqtt
     command: python3 main.py --verbose
 
-  # flask:
-  #   container_name: flask
-  #   restart: always
-  #   build: ./flask
-  #   command: gunicorn app.__init__:create_app() -w 4 -b 0.0.0.0:8000 #--max-requests 10
-  #   environment:
-  #     - TZ=Europe/Stockholm
-  #   volumes:
-  #     - /home/pi/appdata:/db
-  #   depends_on:
-  #     - sensor_logger
+  flask:
+    container_name: flask
+    restart: always
+    build: ./flask
+    command: gunicorn app.hello:create_app() -w 4 -b 0.0.0.0:8000 #--max-requests 10
+    environment:
+      - TZ=Europe/Stockholm
+    volumes:
+      - ./appdata:/db
+    # depends_on:
+    #   - sensor_logger
 
   # nginx:
   #   container_name: nginx
