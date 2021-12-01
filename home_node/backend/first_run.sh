@@ -1,21 +1,20 @@
 #!/bin/bash
 
-set -o allexport; source .env; set +o allexport
+set -a; source .env; set +a
 
-PI_ADDRESS='rpis'
-MPATH='/app'
 SERVER=${SERVER_ENV}
 EMAIL=${EMAIL_ENV}
+PORT=${PORT_ENV}
 
-#sudo apt-get update
-#sudo apt-get install certbot python-certbot-nginx
+PI_ADDRESS='pi@192.168.1.173'
+MPATH='/app'
 
 echo "This will delete the entire appdata folder."
 read -p "Press any key to continue..."
 
 # Upload all files
 # Delete and create folders
-rsync -avz \
+rsync -avz -e "ssh -p ${PORT}" \
 --rsync-path="rm -rf ~${MPATH} \
 && mkdir -p ~${MPATH}/appdata/certbot/letsencrypt \
 && mkdir -p ~${MPATH}/appdata/db \
@@ -24,13 +23,13 @@ rsync -avz \
 --exclude=www/* \
 ./ ${PI_ADDRESS}:~${MPATH}
 
-ssh rpis << EOF
-docker run -it --name certbot \
- -v "./appdata/certbot/letsencrypt:/etc/letsencrypt" \
- -v "./appdata/certbot/www:/var/www/certbot" \
- certbot/certbot:latest certonly \
+ssh ${PI_ADDRESS} -p ${PORT} "bash -s" << EOF
+docker run --rm -i -p 80:80 \
+ -v ./appdata/certbot/letsencrypt:/etc/letsencrypt \
+ -v ./appdata/certbot/www:/var/www/certbot \
+ certbot/certbot:arm32v6-latest certonly \
  -d ${SERVER} --verbose --keep-until-expiring \
- --agree-tos --email ${EMAIL} \
+ --agree-tos --key-type ecdsa --email ${EMAIL} \
  --preferred-challenges=http \
  --webroot --webroot-path=/var/www/certbot
 EOF
