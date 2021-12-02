@@ -1,8 +1,8 @@
 #!/bin/bash
 
 
-PI_ADDRESS='pi@raspberrypi'
-MPATH='/dv_monaden/monaden-signage'
+PI_ADDRESS='rpis'
+MPATH='/app'
 
 echo "> Compiling REACT locally"
 

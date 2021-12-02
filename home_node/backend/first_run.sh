@@ -57,11 +57,14 @@ rsync -avz \
 # SSH to initialize the keys
 ssh ${PI_ADDRESS} "
 docker run --rm -i -p 80:80 \
--v ~/app/appdata/certbot/letsencrypt:/etc/letsencrypt \
--v ~/app/appdata/certbot/www:/var/www/certbot \
+-v ~${MPATH}/appdata/certbot/letsencrypt:/etc/letsencrypt \
+-v ~${MPATH}/appdata/certbot/www:/var/www/certbot \
 certbot/certbot:arm32v6-latest certonly \
 -d ${SERVER} --verbose --keep-until-expiring \
 --agree-tos --key-type ecdsa --register-unsafely-without-email \
 --preferred-challenges=http \
 --webroot --webroot-path=/var/www/certbot
 "
+
+# Start docker
+ssh ${PI_ADDRESS} "cd ~${MPATH} && docker-compose up --build -d"

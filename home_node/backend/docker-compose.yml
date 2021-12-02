@@ -82,19 +82,19 @@ services:
     # depends_on:
     #   - sensor_logger
 
-  # nginx:
-  #   container_name: nginx
-  #   restart: always
-  #   build: ./nginx
-  #   volumes:
-  #     - ./appdata/certbot/letsencrypt:/etc/letsencrypt
-  #     - ./appdata/certbot/www:/var/www/certbot
-  #   ports:
-  #     - 80:80
-  #     - 443:443
-  #   depends_on:
-  #     - flask
-  #   command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+  nginx:
+    container_name: nginx
+    restart: always
+    build: ./nginx
+    volumes:
+      - ./appdata/certbot/letsencrypt:/etc/letsencrypt
+      - ./appdata/certbot/www:/var/www/certbot
+    ports:
+      - 80:80
+      - 443:443
+    depends_on:
+      - flask
+    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
 
   certbot:
     image: certbot/certbot:latest
