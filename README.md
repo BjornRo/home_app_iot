@@ -4,8 +4,8 @@ Under development. Currently refactoring the entire project into smaller modules
 
 Goal of the project is to have an "automated" home app where you can log and control anywhere in the world. 
 
-Goal design:__
-Frontend: TS - React or Vue__
+Goal design:\
+Frontend: TS - React or Vue\
 Backend: FastAPI
 
 The modules in the background feeds redisjson for the backend to get. 
