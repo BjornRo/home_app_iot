@@ -1,24 +1,9 @@
-from flask import Flask, send_from_directory
-from flask_sqlalchemy import SQLAlchemy
-import os
 import json
-from flask.json import JSONEncoder
-from pymemcache.client.base import PooledClient
+import redis
+from redis.commands.json import JSON as REJSON_Client
 from datetime import date
+from fastapi import FastAPI
 
-
-class JSerde(object):
-    def serialize(self, key, value):
-        if isinstance(value, str):
-            return value, 1
-        return json.dumps(value), 2
-
-    def deserialize(self, key, value, flags):
-        if flags == 1:
-            return value
-        if flags == 2:
-            return json.loads(value)
-        raise Exception("Unknown serialization format")
 
 
 db = SQLAlchemy()

@@ -20,7 +20,7 @@ def check_or_create_db() -> None:
     if isfile(DB_TABLES):
         return
 
-    # Create db file and import tables, this assumes ; is on its own line.
+    # Create db file and import tables, terminates on ";".
     conn = sqlite3.connect(DBFILE)
     cursor = conn.cursor()
     with open(DB_TABLES, "r") as f:
