@@ -19,7 +19,7 @@ RELAY_STATUS_PATH = "balcony/relay/status"
 
 # Misc
 MQTT_HOST = "home.1d"
-REJSON_HOST = "rejson"
+REJSON_HOST = "localhost"
 
 ##
 parser = argparse.ArgumentParser()
@@ -37,20 +37,26 @@ parser.add_argument(
 args = parser.parse_args()
 logging.basicConfig(level=args.loglevel)
 
+
 def timenow() -> str:
     return datetime.now().isoformat("T")[:22]
 
-
+# To be able to add stuff to the cache without destroying existing data. Has to create all dicts
+# to be able to add data eventually.
 def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors"):
-    # I could not think of another solution though :)
-    pathkeys = path.split(".")[:0:-1]
-    rebuild_path = ""
-    if r_conn.get(rootkey, ".") is None:
+    if r_conn.get(rootkey) is None:
         r_conn.set(rootkey, ".", {})
-    while(i := pathkeys.pop()):
-        rebuild_path += "." + i
-        if pathkeys and r_conn.get(rootkey, rebuild_path) is None:
-            r_conn.set(rootkey, rebuild_path, {})
+
+    rebuild_path = ""
+    pathkeys = path.split(".")[:0:-1]
+    is_root = True
+    while(pathkeys):
+        i = pathkeys.pop()
+        tmp = rebuild_path + "." + i
+        if r_conn.get(rootkey, "." if is_root else rebuild_path).get(i) is None:
+            r_conn.set(rootkey, tmp, {})
+        is_root = False
+        rebuild_path = tmp
     r_conn.set(rootkey, rebuild_path, elem)
 
 

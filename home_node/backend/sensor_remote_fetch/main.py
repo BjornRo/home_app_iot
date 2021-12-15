@@ -258,15 +258,19 @@ def timenow() -> str:
 
 
 def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors"):
-    # I could not think of another solution though :)
-    pathkeys = path.split(".")[:0:-1]
-    rebuild_path = ""
-    if r_conn.get(rootkey, ".") is None:
+    if r_conn.get(rootkey) is None:
         r_conn.set(rootkey, ".", {})
-    while(i := pathkeys.pop()):
-        rebuild_path += "." + i
-        if pathkeys and r_conn.get(rootkey, rebuild_path) is None:
-            r_conn.set(rootkey, rebuild_path, {})
+
+    rebuild_path = ""
+    pathkeys = path.split(".")[:0:-1]
+    is_root = True
+    while(pathkeys):
+        i = pathkeys.pop()
+        tmp = rebuild_path + "." + i
+        if r_conn.get(rootkey, "." if is_root else rebuild_path).get(i) is None:
+            r_conn.set(rootkey, tmp, {})
+        is_root = False
+        rebuild_path = tmp
     r_conn.set(rootkey, rebuild_path, elem)
 
 
