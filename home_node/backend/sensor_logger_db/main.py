@@ -63,6 +63,7 @@ def querydb(r_conn: REJSON_Client):
         sleep(0.1)  # Try again, else let go.
         mc_data = r_conn.get("sensors")  # type:ignore
 
+    # Might have gone overboard with extensibility. It can also be dangerous if an adversary gets access.
     if isinstance(mc_data, dict):
         mc_data: dict[str, dict]
         devices: dict[str, dict]

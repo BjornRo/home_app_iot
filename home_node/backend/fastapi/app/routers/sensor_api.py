@@ -1,14 +1,9 @@
 from redis.commands.json import JSON as REJSON_Client
-from typing import Optional, Union, List, Dict
-from pydantic import BaseModel
 from fastapi import HTTPException
+from typing import Optional, Dict
+from pydantic import BaseModel
 from . import MyRouterAPI
-import json
 import redis
-from datetime import datetime
-import pymemcache
-from base64 import b64decode, b64encode
-
 
 # Settings
 PREFIX = "/sensor"
