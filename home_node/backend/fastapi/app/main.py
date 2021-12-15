@@ -1,7 +1,3 @@
-import json
-import redis
-from redis.commands.json import JSON as REJSON_Client
-from datetime import date
 from fastapi import FastAPI
 from importlib import import_module
 from glob import glob

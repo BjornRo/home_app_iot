@@ -1,4 +1,0 @@
-schedule
-numpy
-pandas
-matplotlib
