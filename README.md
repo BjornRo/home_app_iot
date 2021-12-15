@@ -1,5 +1,7 @@
 # home_app_iot
 
+I'm currently doing my BSc in Computer Science, time is limited for this project.
+
 Under development. Currently refactoring the entire project into smaller modules to break up the dependencies for easier maintainability and extensibility.
 
 Goal of the project is to have an "automated" home app where you can log and control anywhere in the world. 
