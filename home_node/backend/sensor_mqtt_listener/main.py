@@ -97,12 +97,14 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client):
         if iter_obj is None:
             return
         sender = topic.split("/")[0]
+        data = {}
         for key, value in iter_obj:
             # If a device sends bad data -> break and discard, else update
             if not test_value(key, value):
                 break
-            set_json(r_conn, f".home.{sender}.{key}", value / 100)
+            data[key] = value / 100
         else:
+            set_json(r_conn, f".home.{sender}.data", data)
             set_json(r_conn, f".home.{sender}.time", datetime.now().isoformat("T"))
             set_json(r_conn, f".home.{sender}.new", True)
 

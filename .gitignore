@@ -55,3 +55,7 @@ private_encode.py
 *.dat
 *.conf
 *.json
+
+
+# Ignore the ignore
+!requirements.txt

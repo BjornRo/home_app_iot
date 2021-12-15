@@ -76,7 +76,7 @@ def socket_handler(device_cred: dict, r_conn: REJSON_Client):
                 attempts: int = user_data["attempts"] + 1
                 if attempts >= MAX_ATTEMPTS:
                     user_data["bantime"] = datetime.now() + timedelta(minutes=BAN_TIME*attempts*5)
-                    attempts -= 1
+                    attempts = MAX_ATTEMPTS
                 elif attempts >= MAX_ATTEMPTS/2:
                     user_data["bantime"] = datetime.now() + timedelta(minutes=BAN_TIME*attempts*2)
                 user_data["attempts"] = attempts
@@ -221,11 +221,13 @@ def parse_and_update(r_conn: REJSON_Client, location_name: str, payload: str) ->
         iter_obj = get_dict(dev_data)
         if iter_obj is None:
             continue
+        data = {}
         for data_key, value in iter_obj.items():
             if not test_value(data_key, value, 100):
                 continue
-            set_json(r_conn, f".{location_name}.{device_key}.{data_key}", value)
+            data[data_key] = value
         else:
+            set_json(r_conn, f".{location_name}.{device_key}.data", data)
             set_json(r_conn, f".{location_name}.{device_key}.time", datetime.now().isoformat("T"))
             set_json(r_conn, f".{location_name}.{device_key}.new", True)
             return True
