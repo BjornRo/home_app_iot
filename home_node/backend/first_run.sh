@@ -63,8 +63,9 @@ certbot/certbot:arm32v6-latest certonly \
 -d ${SERVER} --verbose --keep-until-expiring \
 --agree-tos --key-type ecdsa --register-unsafely-without-email \
 --preferred-challenges=http \
---webroot --webroot-path=/var/www/certbot
+--standalone
 "
+#--webroot --webroot-path=/var/www/certbot
 
 # Start docker
 ssh ${PI_ADDRESS} "cd ~${MPATH} && docker-compose up --build -d"
