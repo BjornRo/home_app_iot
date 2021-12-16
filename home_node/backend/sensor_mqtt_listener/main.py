@@ -45,6 +45,8 @@ def timenow() -> str:
 
 # To be able to add stuff to the cache without destroying existing data. Has to create all dicts
 # to be able to add data eventually.
+
+
 def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors") -> None:
     if r_conn.get(rootkey) is None:
         r_conn.set(rootkey, ".", {})
@@ -89,10 +91,10 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client) -> None:
             elif isinstance(listlike, (int, float)):
                 listlike = (listlike,)
             else:
-                logging.warning(timenow() + " > Unknown type received")
+                logging.warning(timenow() + " > Unknown type received: " + str(listlike)[:26])
                 return
         except:
-            logging.warning(timenow() + " > Bad payload received")
+            logging.warning(f"{timenow()} > Bad data received from: {str(msg.topic)} | data: {str(msg.payload)[:26]}")
             return
 
         # Handle the topic depending on what it is about.
@@ -101,7 +103,7 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client) -> None:
             if not set(listlike).difference(set((0, 1))) and len(listlike) == 4:
                 set_json(r_conn, ".home.balcony.relay.status", listlike)
             else:
-                logging.warning(timenow() + " > Status data malformed: " + str(listlike)[:20])
+                logging.warning(timenow() + " > Status data malformed: " + str(listlike)[:26])
             return
         iter_obj = get_iterable(listlike)
         if iter_obj is None:
@@ -136,7 +138,7 @@ def get_iterable(recvdata: dict | list | tuple) -> ItemsView | zip[tuple[str, An
         return recvdata.items()
     if isinstance(recvdata, (tuple, list)):
         return zip(MINOR_KEYS, recvdata)
-    logging.warning(timenow() + " > Payload malformed: " + str(recvdata)[:26])
+    logging.warning(timenow() + " > Payload malformed at get_iterable: " + str(recvdata)[:26])
     return None
 
 
