@@ -1,3 +1,4 @@
+import logging
 from redis.commands.json import JSON as REJSON_Client
 from datetime import datetime
 from typing import Optional
@@ -10,15 +11,16 @@ import redis
 TASK_TIMES = (":30", ":00")
 
 # PATH
-DBFILE = r"db\sensor_db.db"
+DBFILE = "/db/sensor_db.db"
 DB_TABLES = "sql_db_tables.sql"
 
 REJSON_HOST = "rejson"
 
 
 def check_or_create_db() -> None:
+    # Don't overwrite an existing db-file.
     from os.path import isfile
-    if isfile(DB_TABLES):
+    if isfile(DBFILE):
         return
 
     # Create db file and import tables, terminates on ";".
@@ -42,7 +44,7 @@ def main():
 
     r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=0).json()  # type: ignore
     for t in TASK_TIMES:
-        schedule.every().hour.at(t).do(querydb, args=(r_conn,))
+        schedule.every().hour.at(t).do(querydb, r_conn=r_conn)
 
     while 1:
         schedule.run_pending()
@@ -57,7 +59,7 @@ def querydb(r_conn: REJSON_Client):
     # {"sensors": {location: {Device_Name: {measurement: value}}}}
     conn = sqlite3.connect(DBFILE)
     cursor = conn.cursor()
-    cursor.execute(f"INSERT INTO Timestamp VALUES ('{time_now}')")
+    cursor.execute(f"INSERT INTO timestamps VALUES ('{time_now}')")
     mc_data = r_conn.get("sensors")  # type:ignore
     if mc_data is None:
         sleep(0.1)  # Try again, else let go.

@@ -6,6 +6,8 @@ import argparse
 import requests
 import logging
 
+# IPV6 only. So progressive!
+
 parser = argparse.ArgumentParser(description='Settings for time delay')
 parser.add_argument("device", type=str, help="Device to track, eth0, wlan0 etc...")
 parser.add_argument("time", help="Default seconds")

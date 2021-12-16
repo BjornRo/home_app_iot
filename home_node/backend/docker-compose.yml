@@ -21,14 +21,14 @@ services:
       - 6379:6379
     command: redis-server --loadmodule librejson.so
 
-  ddns:
-    container_name: ddns
-    restart: always
-    build:
-      context: ./ddns
-      dockerfile: ddns.dockerfile
-    command: python3 main.py wlan0 --hrs 2
-    network_mode: host
+  # ddns:
+  #   container_name: ddns
+  #   restart: always
+  #   build:
+  #     context: ./ddns
+  #     dockerfile: ddns.dockerfile
+  #   command: python3 main.py wlan0 --hrs 2
+  #   network_mode: host
 
   sensor_logger_db:
     container_name: sensor_logger_db
@@ -59,8 +59,9 @@ services:
   sensor_remote_fetch:
     container_name: sensor_remote_fetch
     volumes:
-      - "/etc/timezone:/etc/timezone:ro"
-      - "/etc/localtime:/etc/localtime:ro"
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - ./appdata/certbot/letsencrypt:/sslcerts
     restart: always
     build:
       context: ./sensor_remote_fetch
@@ -76,7 +77,7 @@ services:
     build:
       context: ./fastapi
       dockerfile: fastapi.dockerfile
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --log-level critical
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 #--log-level critical
     volumes:
       - ./appdata:/db
       - /etc/timezone:/etc/timezone:ro

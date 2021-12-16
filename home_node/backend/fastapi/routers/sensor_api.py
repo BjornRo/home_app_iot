@@ -1,6 +1,6 @@
 from redis.commands.json import JSON as REJSON_Client
 from fastapi import HTTPException
-from typing import Optional, Dict
+from typing import Optional, Dict, Union
 from pydantic import BaseModel
 from . import MyRouterAPI
 import redis
@@ -19,7 +19,8 @@ r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=0).json()
 
 # Data models
 class Data(BaseModel):
-    __root__: Dict[str, int | float | str]
+    # TODO use '|' asap pydantic is updated
+    __root__: Dict[str, Union[float, int, str]]
 
 
 class DeviceData(BaseModel):
