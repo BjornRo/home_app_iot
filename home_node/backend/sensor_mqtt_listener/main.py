@@ -43,10 +43,9 @@ logging.basicConfig(level=args.loglevel)
 def timenow() -> str:
     return datetime.now().isoformat("T")[:22]
 
+
 # To be able to add stuff to the cache without destroying existing data. Has to create all dicts
 # to be able to add data eventually.
-
-
 def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors") -> None:
     if r_conn.get(rootkey) is None:
         r_conn.set(rootkey, ".", {})
@@ -101,7 +100,7 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client) -> None:
         topic: str = msg.topic.replace("home/", "")
         if RELAY_STATUS_PATH == topic:  # Test topic. Remove all 0,1. Set should be empty to be valid.
             if not set(listlike).difference(set((0, 1))) and len(listlike) == 4:
-                set_json(r_conn, ".home." + RELAY_STATUS_PATH.replace("/",".") , listlike)
+                set_json(r_conn, ".home." + RELAY_STATUS_PATH.replace("/", "."), listlike)
             else:
                 logging.warning(timenow() + " > Status data malformed: " + str(listlike)[:26])
             return
