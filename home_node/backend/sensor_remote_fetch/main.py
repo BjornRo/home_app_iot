@@ -254,7 +254,7 @@ def test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
             case "airpressure":
                 return 90000 <= value <= 115000
     except:
-        logging.warning(timenow() + " > Bad key in data.")
+        logging.warning(timenow() + " > Bad key in data: " + key + " | value: " + str(value))
     return False
 
 
