@@ -120,7 +120,7 @@ def client_handler(block_dict: dict[str, dict], r_conn: REJSON_Client, device_cr
                 location_name, passwd = data.split(b'\n')
                 location_name = location_name.decode()
                 hash_passwd = device_cred.get(location_name)
-                if hash_passwd is None:
+                if hash_passwd is None or not location_name:
                     raise Exception("User not found")
             except:
                 # If any data is bad, such as non-existing user or malformed payload, then use a default invalid user.
