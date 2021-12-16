@@ -136,7 +136,7 @@ def client_handler(block_dict: dict[str, dict], r_conn: REJSON_Client, device_cr
 
         # If validation fails due to invalid user or an active adversary, then log the event.
         c_addr, c_port = client.getpeername()
-        logging.warning(f"{timenow()} > {c_addr}:{c_port}, tried to connect with data: {str(data)[:16]}...")
+        logging.warning(f"{timenow()} > {c_addr}:{c_port}, tried to connect with data: {str(data)[:24]}...")
         return None
 
     # No need for contex-manager due to always trying to close conn at the end.
