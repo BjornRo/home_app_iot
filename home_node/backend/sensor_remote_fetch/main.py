@@ -113,29 +113,30 @@ def client_handler(block_dict: dict[str, dict], r_conn: REJSON_Client, device_cr
         return b''.join(received_chunks)
 
     def validate_user(device_cred: dict[str, bytes], data: bytes) -> str | None:
-        # dataform: b"login\npassw", data may be None -> Abuse try except...
+        # dataform: b"login\npassw", data may be None
+        # Test if data is somewhat valid. Exactly one \n or else unpack error, which is clearly invalid.
         try:
-            # Test if data is somewhat valid. Exactly one \n or else unpack error, which is clearly invalid.
-            try:
-                location_name, passwd = data.split(b'\n')
-                location_name = location_name.decode()
-                hash_passwd = device_cred.get(location_name)
-                if hash_passwd is None or not location_name:
-                    raise Exception("User not found")
-            except:
-                # If any data is bad, such as non-existing user or malformed payload, then use a default invalid user.
-                location_name = None
-                hash_passwd = b'$2b$12$jjWy0CnsCN9Y9Ij4s7eNyeEnmmlJgmJlHANykZnDOA2A3iHYZGZGC'
-                passwd = b"hash_is_totally_not_password"
-
+            location_name, passwd = data.split(b'\n')
+            location_name = location_name.decode()
+            hash_passwd = device_cred.get(location_name)
+            if hash_passwd is None or not location_name:
+                raise Exception("User not found")
+        except:
+            # If any data is bad, such as non-existing user or malformed payload, then use a default invalid user.
+            location_name = None
+            hash_passwd = b'$2b$12$jjWy0CnsCN9Y9Ij4s7eNyeEnmmlJgmJlHANykZnDOA2A3iHYZGZGC'
+            passwd = b"hash_is_totally_not_password"
+        try:
             # Each computation takes same time even if invalid user, then side-channel attack should not be viable.
+            # Returns the location_name if valid, otherwise returns None.
             if checkpw(passwd, hash_passwd):
                 return location_name
-            else:
-                c_addr, c_port = client.getpeername()
-                logging.warning(f"{timenow()} > {c_addr}:{c_port}, tried to connect with data: {str(data)[:16]}...")
         except ValueError as e:
             logging.warning(timenow() + " > ValueError in validate_user: " + str(e))
+
+        # If validation fails due to invalid user or an active adversary, then log the event.
+        c_addr, c_port = client.getpeername()
+        logging.warning(f"{timenow()} > {c_addr}:{c_port}, tried to connect with data: {str(data)[:16]}...")
         return None
 
     # No need for contex-manager due to always trying to close conn at the end.
