@@ -121,9 +121,9 @@ def client_handler(block_dict: dict[str, dict], r_conn: REJSON_Client, device_cr
                 location_name = location_name.decode()
             except:
                 location_name = "_Placeholder"
-                passwd = b"_SomePass"
+                passwd = b"hash_is_totally_not_password"
 
-            # Get hash, if hash is none, use a default hash.
+            # Get hash, if hash is none, use a default hash. _Placeholder will always return None.
             # Each computation takes same time even if invalid user, then side-channel attack should not be viable.
             hash_passwd = device_cred.get(location_name)
             if hash_passwd is None:
