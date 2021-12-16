@@ -84,7 +84,7 @@ services:
     ports:
       - 8000:8000
     depends_on:
-      - sensor_logger
+      - sensor_mqtt_listener
 
   # nginx:
   #   container_name: nginx
