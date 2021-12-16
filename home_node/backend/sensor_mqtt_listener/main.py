@@ -19,7 +19,7 @@ RELAY_STATUS_PATH = "balcony/relay/status"
 
 # Misc
 MQTT_HOST = "home.1d"
-REJSON_HOST = "localhost"
+REJSON_HOST = "rejson"
 
 ##
 parser = argparse.ArgumentParser()

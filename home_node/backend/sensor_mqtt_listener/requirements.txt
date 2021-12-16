@@ -1,2 +1,2 @@
-paho_mqtt==1.6.1
-redis==4.0.0
+paho_mqtt
+redis

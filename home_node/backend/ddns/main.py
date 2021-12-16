@@ -6,18 +6,16 @@ import argparse
 import requests
 import logging
 
-
 parser = argparse.ArgumentParser(description='Settings for time delay')
 parser.add_argument("device", type=str, help="Device to track, eth0, wlan0 etc...")
 parser.add_argument("time", help="Default seconds")
-parser.add_argument("--hrs", action="store_true", help="Select hour between")
-parser.add_argument("--min", action="store_true", help="Select min between")
+parser.add_argument("--hrs", dest="hour", action="store_true", help="Select hour between", default=False)
+parser.add_argument("--min", dest="minutes", action="store_true", help="Select min between", default=False)
 
 args = parser.parse_args()
 
 SLEEP_TIME = 7200
 CONTACT_TIMEOUT = 10  # Seconds
-
 
 if args.time:
     v = float(args.time)
@@ -26,9 +24,10 @@ if args.time:
             SLEEP_TIME = v * 3600
         elif args.minutes:
             SLEEP_TIME = v * 60
-        if 60 < SLEEP_TIME:
+        else:
+            SLEEP_TIME = v
+        if 60 > SLEEP_TIME:
             SLEEP_TIME = 7200
-
 
 def main():
     cfg = ConfigParser()

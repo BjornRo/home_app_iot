@@ -21,70 +21,70 @@ services:
       - 6379:6379
     command: redis-server --loadmodule librejson.so
 
-  # ddns:
-  #   container_name: ddns
-  #   restart: always
-  #   build:
-  #     context: ./ddns
-  #     dockerfile: ddns.dockerfile
-  #   command: python3 main.py wlan0 --hrs 2
-  #   network_mode: host
+  ddns:
+    container_name: ddns
+    restart: always
+    build:
+      context: ./ddns
+      dockerfile: ddns.dockerfile
+    command: python3 main.py wlan0 --hrs 2
+    network_mode: host
 
-  # sensor_logger_db:
-  #   container_name: sensor_logger_db
-  #   volumes:
-  #     - ./appdata/db:/db
-  #     - /etc/timezone:/etc/timezone:ro
-  #     - /etc/localtime:/etc/localtime:ro
-  #   restart: always
-  #   build:
-  #     context: ./sensor_logger_db
-  #     dockerfile: sensor_logger_db.dockerfile
-  #   command: python3 main.py --verbose
+  sensor_logger_db:
+    container_name: sensor_logger_db
+    volumes:
+      - ./appdata/db:/db
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    restart: always
+    build:
+      context: ./sensor_logger_db
+      dockerfile: sensor_logger_db.dockerfile
+    command: python3 main.py --verbose
 
-  # sensor_mqtt_listener:
-  #   container_name: sensor_mqtt_listener
-  #   volumes:
-  #     - /etc/timezone:/etc/timezone:ro
-  #     - /etc/localtime:/etc/localtime:ro
-  #   restart: always
-  #   build:
-  #     context: ./sensor_mqtt_listener
-  #     dockerfile: sensor_mqtt_listener.dockerfile
-  #   depends_on:
-  #     - rejson
-  #   #  - mqtt
-  #   command: python3 main.py --verbose
+  sensor_mqtt_listener:
+    container_name: sensor_mqtt_listener
+    volumes:
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    restart: always
+    build:
+      context: ./sensor_mqtt_listener
+      dockerfile: sensor_mqtt_listener.dockerfile
+    depends_on:
+      - rejson
+    #  - mqtt
+    command: python3 main.py --verbose
 
-  # sensor_remote_fetch:
-  #   container_name: sensor_remote_fetch
-  #   volumes:
-  #     - "/etc/timezone:/etc/timezone:ro"
-  #     - "/etc/localtime:/etc/localtime:ro"
-  #   restart: always
-  #   build:
-  #     context: ./sensor_remote_fetch
-  #     dockerfile: sensor_remote_fetch.dockerfile
-  #   depends_on:
-  #     - rejson
-  #   #  - mqtt
-  #   command: python3 main.py --verbose
+  sensor_remote_fetch:
+    container_name: sensor_remote_fetch
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+    restart: always
+    build:
+      context: ./sensor_remote_fetch
+      dockerfile: sensor_remote_fetch.dockerfile
+    depends_on:
+      - rejson
+    #  - mqtt
+    command: python3 main.py --verbose
 
-  # fastapi:
-  #   container_name: fastapi
-  #   restart: always
-  #   build:
-  #     context: ./fastapi
-  #     dockerfile: fastapi.dockerfile
-  #   command: uvicorn main:app --host 0.0.0.0 --port 8000 --log-level critical
-  #   volumes:
-  #     - ./appdata:/db
-  #     - /etc/timezone:/etc/timezone:ro
-  #     - /etc/localtime:/etc/localtime:ro
-  #   ports:
-  #     - 8000:8000
-    # depends_on:
-    #   - sensor_logger
+  fastapi:
+    container_name: fastapi
+    restart: always
+    build:
+      context: ./fastapi
+      dockerfile: fastapi.dockerfile
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --log-level critical
+    volumes:
+      - ./appdata:/db
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - 8000:8000
+    depends_on:
+      - sensor_logger
 
   # nginx:
   #   container_name: nginx

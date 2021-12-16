@@ -1,2 +1,2 @@
-python_bcrypt==0.3.2
-redis==4.0.0
+bcrypt
+redis
