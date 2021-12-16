@@ -101,7 +101,7 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client) -> None:
         topic: str = msg.topic.replace("home/", "")
         if RELAY_STATUS_PATH == topic:  # Test topic. Remove all 0,1. Set should be empty to be valid.
             if not set(listlike).difference(set((0, 1))) and len(listlike) == 4:
-                set_json(r_conn, ".home.balcony.relay.status", listlike)
+                set_json(r_conn, ".home." + RELAY_STATUS_PATH.replace("/",".") , listlike)
             else:
                 logging.warning(timenow() + " > Status data malformed: " + str(listlike)[:26])
             return
