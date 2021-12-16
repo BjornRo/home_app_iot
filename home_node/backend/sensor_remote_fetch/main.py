@@ -126,7 +126,7 @@ def client_handler(block_dict: dict[str, dict], r_conn: REJSON_Client, device_cr
             # Get hash, if hash is none, use a default hash. _Placeholder will always return None.
             # Each computation takes same time even if invalid user, then side-channel attack should not be viable.
             hash_passwd = device_cred.get(location_name)
-            if hash_passwd is None:
+            if hash_passwd is None or location_name == "_Placeholder":
                 c_addr, c_port = client.getpeername()
                 logging.warning(f"{timenow()} > {c_addr}:{c_port}, tried to connect with data: {str(data)[:16]}...")
                 hash_passwd = b'$2b$12$jjWy0CnsCN9Y9Ij4s7eNyeEnmmlJgmJlHANykZnDOA2A3iHYZGZGC'
