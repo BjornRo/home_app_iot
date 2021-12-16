@@ -134,8 +134,6 @@ def client_handler(block_dict: dict[str, dict], r_conn: REJSON_Client, device_cr
             else:
                 c_addr, c_port = client.getpeername()
                 logging.warning(f"{timenow()} > {c_addr}:{c_port}, tried to connect with data: {str(data)[:16]}...")
-        except UnicodeDecodeError as e:
-            logging.warning(timenow() + " > Device name was not in utf8 codec: " + str(e))
         except ValueError as e:
             logging.warning(timenow() + " > ValueError in validate_user: " + str(e))
         return None
