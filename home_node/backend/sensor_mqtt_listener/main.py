@@ -100,6 +100,8 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client) -> None:
         if RELAY_STATUS_PATH == topic:  # Test topic. Remove all 0,1. Set should be empty to be valid.
             if not set(listlike).difference(set((0, 1))) and len(listlike) == 4:
                 set_json(r_conn, ".home.balcony.relay.status", listlike)
+            else:
+                logging.warning(timenow() + " > Status data malformed: " + str(listlike)[:20])
             return
         iter_obj = get_iterable(listlike)
         if iter_obj is None:
@@ -134,7 +136,7 @@ def get_iterable(recvdata: dict | list | tuple) -> ItemsView | zip[tuple[str, An
         return recvdata.items()
     if isinstance(recvdata, (tuple, list)):
         return zip(MINOR_KEYS, recvdata)
-    logging.warning(timenow() + " > Payload malformed")
+    logging.warning(timenow() + " > Payload malformed: " + str(recvdata)[:26])
     return None
 
 
