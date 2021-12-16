@@ -125,11 +125,11 @@ def client_handler(block_dict: dict[str, dict], r_conn: REJSON_Client, device_cr
                     raise Exception("User not found")
                 valid = True
             except:
+                # If any data is bad, such as non-existing user or malformed payload, then use a default invalid user.
                 location_name = "_Placeholder_"
                 hash_passwd = b'$2b$12$jjWy0CnsCN9Y9Ij4s7eNyeEnmmlJgmJlHANykZnDOA2A3iHYZGZGC'
                 passwd = b"hash_is_totally_not_password"
 
-            # Get hash, if hash is none, use a default hash. _Placeholder will always return None.
             # Each computation takes same time even if invalid user, then side-channel attack should not be viable.
             if not valid:
                 c_addr, c_port = client.getpeername()
