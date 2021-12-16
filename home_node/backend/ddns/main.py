@@ -7,6 +7,7 @@ import requests
 import logging
 
 # IPV6 only. So progressive!
+# This script can run as a cronjob on host-machine but upload and go is worth the potential performance loss.
 
 parser = argparse.ArgumentParser(description='Settings for time delay')
 parser.add_argument("device", type=str, help="Device to track, eth0, wlan0 etc...")

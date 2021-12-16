@@ -7,4 +7,3 @@ WORKDIR $CONTAINER_HOME
 
 RUN pip install --no-cache --upgrade pip setuptools
 RUN pip install --no-cache-dir -r requirements.txt
-#RUN echo "Europe/Stockholm" >  /etc/timezone
