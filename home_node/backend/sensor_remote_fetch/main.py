@@ -115,21 +115,25 @@ def client_handler(block_dict: dict[str, dict], r_conn: REJSON_Client, device_cr
     def validate_user(device_cred: dict[str, bytes], data: bytes) -> str | None:
         # dataform: b"login\npassw", data may be None -> Abuse try except...
         try:
+            valid = False
             # Test if data is somewhat valid. Exactly one \n or else unpack error, which is clearly invalid.
             try:
                 location_name, passwd = data.split(b'\n')
                 location_name = location_name.decode()
+                hash_passwd = device_cred.get(location_name)
+                if hash_passwd is None:
+                    raise Exception("User not found")
+                valid = True
             except:
-                location_name = "_Placeholder"
+                location_name = "_Placeholder_"
+                hash_passwd = b'$2b$12$jjWy0CnsCN9Y9Ij4s7eNyeEnmmlJgmJlHANykZnDOA2A3iHYZGZGC'
                 passwd = b"hash_is_totally_not_password"
 
             # Get hash, if hash is none, use a default hash. _Placeholder will always return None.
             # Each computation takes same time even if invalid user, then side-channel attack should not be viable.
-            hash_passwd = device_cred.get(location_name)
-            if hash_passwd is None or location_name == "_Placeholder":
+            if not valid:
                 c_addr, c_port = client.getpeername()
                 logging.warning(f"{timenow()} > {c_addr}:{c_port}, tried to connect with data: {str(data)[:16]}...")
-                hash_passwd = b'$2b$12$jjWy0CnsCN9Y9Ij4s7eNyeEnmmlJgmJlHANykZnDOA2A3iHYZGZGC'
             if checkpw(passwd, hash_passwd):
                 return location_name
         except UnicodeDecodeError as e:
