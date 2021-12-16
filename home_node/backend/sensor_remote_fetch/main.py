@@ -115,9 +115,9 @@ def client_handler(block_dict: dict[str, dict], r_conn: REJSON_Client, device_cr
     def validate_user(device_cred: dict[str, bytes], data: bytes) -> str | None:
         # dataform: b"login\npassw", data may be None -> Abuse try except...
         try:
-            # Malformed if 2 splits. Faster to raise except than test pw.
+            # Test if data is somewhat valid. Exactly one \n or else unpack error, which is clearly invalid.
             try:
-                location_name, passwd = data.split(b'\n', 2)
+                location_name, passwd = data.split(b'\n')
                 location_name = location_name.decode()
             except:
                 location_name = "_Placeholder"
