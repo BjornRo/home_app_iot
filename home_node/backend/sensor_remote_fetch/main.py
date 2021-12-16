@@ -266,7 +266,7 @@ def timenow() -> str:
     return datetime.now().isoformat("T")[:22]
 
 
-def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors"):
+def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors") -> None:
     if r_conn.get(rootkey) is None:
         r_conn.set(rootkey, ".", {})
 

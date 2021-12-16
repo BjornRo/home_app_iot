@@ -2,6 +2,7 @@ from redis.commands.json import JSON as REJSON_Client
 from paho.mqtt.client import Client
 from datetime import datetime
 from ast import literal_eval
+from collections.abc import ItemsView
 from time import sleep
 import argparse
 import logging
@@ -43,7 +44,7 @@ def timenow() -> str:
 
 # To be able to add stuff to the cache without destroying existing data. Has to create all dicts
 # to be able to add data eventually.
-def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors"):
+def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors") -> None:
     if r_conn.get(rootkey) is None:
         r_conn.set(rootkey, ".", {})
 
@@ -60,7 +61,7 @@ def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors"):
     r_conn.set(rootkey, rebuild_path, elem)
 
 
-def main():
+def main() -> None:
     mqtt = Client("sensor_mqtt_log")
     r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=0).json()  # type: ignore
 
@@ -73,13 +74,13 @@ def main():
     mqtt_agent(mqtt, r_conn)
 
 
-def mqtt_agent(mqtt: Client, r_conn: REJSON_Client):
+def mqtt_agent(mqtt: Client, r_conn: REJSON_Client) -> None:
     def on_connect(client, *_):
         client.subscribe("home/" + RELAY_STATUS_PATH)
         for topic in SUB_TOPICS:
             client.subscribe("home/" + topic)
 
-    def on_message(_client, _userdata, msg):
+    def on_message(_client, _userdata, msg) -> None:
         try:  # Get values into a listlike form - Test valid payload.
             listlike = literal_eval(msg.payload.decode())
             if isinstance(listlike, (tuple, dict, list)):
@@ -127,7 +128,7 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client):
     mqtt.loop_forever()
 
 
-def get_iterable(recvdata: dict | list | tuple):
+def get_iterable(recvdata: dict | list | tuple) -> ItemsView | zip[tuple] | None:
     if isinstance(recvdata, dict) and all([i.lower() in MINOR_KEYS for i in recvdata.keys()]):
         return recvdata.items()
     if isinstance(recvdata, (tuple, list)):
@@ -147,7 +148,7 @@ def test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
             case "airpressure":
                 return 90000 <= value <= 115000
     except:
-        logging.warning(timenow() + " > Bad key in data.")
+        logging.warning(timenow() + " > Bad key in data: " + key + " | value: " + str(value))
     return False
 
 
