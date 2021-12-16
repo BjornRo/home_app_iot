@@ -1,8 +1,9 @@
 from redis.commands.json import JSON as REJSON_Client
+from collections.abc import ItemsView
 from paho.mqtt.client import Client
 from datetime import datetime
 from ast import literal_eval
-from collections.abc import ItemsView
+from typing import Any
 from time import sleep
 import argparse
 import logging
@@ -128,7 +129,7 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client) -> None:
     mqtt.loop_forever()
 
 
-def get_iterable(recvdata: dict | list | tuple) -> ItemsView | zip[tuple] | None:
+def get_iterable(recvdata: dict | list | tuple) -> ItemsView | zip[tuple[str, Any]] | None:
     if isinstance(recvdata, dict) and all([i.lower() in MINOR_KEYS for i in recvdata.keys()]):
         return recvdata.items()
     if isinstance(recvdata, (tuple, list)):
