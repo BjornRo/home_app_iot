@@ -58,14 +58,14 @@ args = parser.parse_args()
 logging.basicConfig(level=args.loglevel)
 
 
-def main():
+def main() -> None:
     r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=0).json()  # type: ignore
     device_credentials = get_default_credentials()
     socket_handler(device_credentials, r_conn)
 
 
-def socket_handler(device_cred: dict, r_conn: REJSON_Client):
-    def is_client_allowed(block_dict: dict[str, dict], ip_addr: str, port):
+def socket_handler(device_cred: dict, r_conn: REJSON_Client) -> None:
+    def is_client_allowed(block_dict: dict[str, dict], ip_addr: str, port: str) -> bool:
         bantime: datetime
         user_data = block_dict.get(ip_addr)
         if user_data is not None:
@@ -101,7 +101,7 @@ def socket_handler(device_cred: dict, r_conn: REJSON_Client):
 
 
 def client_handler(block_dict: dict[str, dict], r_conn: REJSON_Client, device_cred: dict[str, bytes], client: ssl.SSLSocket) -> None:
-    def recvall(client:  ssl.SSLSocket, size, buf_size=4096) -> bytes:
+    def recvall(client:  ssl.SSLSocket, size: int, buf_size=4096) -> bytes:
         received_chunks = []
         remaining = size
         while remaining > 0:
@@ -116,17 +116,26 @@ def client_handler(block_dict: dict[str, dict], r_conn: REJSON_Client, device_cr
         # dataform: b"login\npassw", data may be None -> Abuse try except...
         try:
             # Malformed if 2 splits. Faster to raise except than test pw.
-            device_name, passwd = data.split(b'\n', 2)
-            device_name = device_name.decode()
-            hash_passwd = device_cred.get(device_name)
+            try:
+                location_name, passwd = data.split(b'\n', 2)
+                location_name = location_name.decode()
+            except:
+                location_name = "_Placeholder"
+                passwd = b"_SomePass"
+
+            # Get hash, if hash is none, use a default hash.
+            # Each computation takes same time even if invalid user, then side-channel attack should not be viable.
+            hash_passwd = device_cred.get(location_name)
             if hash_passwd is None:
-                logging.warning(timenow() + " > An unknown entity tried to connect:" + device_name)
-            elif checkpw(passwd, hash_passwd):
-                return device_name
+                c_addr, c_port = client.getpeername()
+                logging.warning(f"{timenow()} > {c_addr}:{c_port}, tried to connect with data: {str(data)[:16]}")
+                hash_passwd = b'$2b$12$jjWy0CnsCN9Y9Ij4s7eNyeEnmmlJgmJlHANykZnDOA2A3iHYZGZGC'
+            if checkpw(passwd, hash_passwd):
+                return location_name
         except UnicodeDecodeError as e:
             logging.warning(timenow() + " > Device name was not in utf8 codec: " + str(e))
         except ValueError as e:
-            logging.warning(timenow() + " > Password check failed: " + str(e))
+            logging.warning(timenow() + " > ValueError in validate_user: " + str(e))
         return None
 
     # No need for contex-manager due to always trying to close conn at the end.

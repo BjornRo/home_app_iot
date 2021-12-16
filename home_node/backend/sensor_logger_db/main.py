@@ -39,7 +39,7 @@ def check_or_create_db() -> None:
     conn.close
 
 
-def main():
+def main() -> None:
     check_or_create_db()
 
     r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=0).json()  # type: ignore
@@ -53,7 +53,7 @@ def main():
             sleep(sleeptime)
 
 
-def querydb(r_conn: REJSON_Client):
+def querydb(r_conn: REJSON_Client) -> None:
     time_now = datetime.now().isoformat("T", "minutes")
 
     # {"sensors": {location: {Device_Name: {measurement: value}}}}
