@@ -24,17 +24,12 @@ def check_or_create_db() -> None:
         return
 
     # Create db file and import tables, terminates on ";".
+    with open(DB_TABLES, "r") as f:
+        sql_script = f.read()
     conn = sqlite3.connect(DBFILE)
     cursor = conn.cursor()
-    with open(DB_TABLES, "r") as f:
-        expr = f.readline()
-        tmp_expr = ""
-        while(expr):
-            tmp_expr += expr.rstrip()
-            if tmp_expr and tmp_expr[-1] == ";":
-                cursor.execute(tmp_expr[:-1])
-                tmp_expr = ""
-            expr = f.readline()
+    cursor.executescript(sql_script)
+    conn.commit()
     cursor.close()
     conn.close
 
