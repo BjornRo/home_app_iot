@@ -272,12 +272,10 @@ def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors") -> None:
         r_conn.set(rootkey, ".", {})
 
     rebuild_path = ""
-    pathkeys = path.split(".")[:0:-1]
     is_root = True
-    while(pathkeys):
-        i = pathkeys.pop()
-        tmp = rebuild_path + "." + i
-        if r_conn.get(rootkey, "." if is_root else rebuild_path).get(i) is None:
+    for p in path.split(".")[1:]:
+        tmp = rebuild_path + "." + p
+        if r_conn.get(rootkey, "." if is_root else rebuild_path).get(p) is None:
             r_conn.set(rootkey, tmp, {})
         is_root = False
         rebuild_path = tmp
