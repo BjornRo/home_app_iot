@@ -1,5 +1,6 @@
 from redis.commands.json import JSON as REJSON_Client
 from datetime import datetime
+from typing import Optional
 from time import sleep
 import schedule
 import sqlite3
@@ -48,48 +49,51 @@ def main() -> None:
 
 def querydb(r_conn: REJSON_Client) -> None:
     time_now = datetime.now().isoformat("T", "seconds")
+    cached_data: Optional[dict[str, dict]] = None
+    for _ in range(2): # Two attempts to get the data otherwise ignore.
+        cached_data = r_conn.get("sensors")
+        if cached_data:
+            break
+        sleep(0.1)  # Try again, else let go.
+
+    # If data is None or empty, or data is not a dict.
+    if not cached_data or not isinstance(cached_data, dict):
+        return
 
     conn = sqlite3.connect(DBFILE)
     cursor = conn.cursor()
     cursor.execute(f"INSERT INTO timestamps VALUES (?)", (time_now,))
-    cached_data = r_conn.get("sensors")
-    if cached_data is None:
-        sleep(0.1)  # Try again, else let go.
-        cached_data = r_conn.get("sensors")
 
     # Might have gone overboard with extensibility. It can also be dangerous if an adversary gets access.
-    if isinstance(cached_data, dict):
-        cached_data: dict[str, dict]
-        devices: dict[str, dict]
-        device_data: dict[str, str | dict]
+    devices: dict[str, dict]
+    device_data: dict[str, str | dict]
+    for location, devices in cached_data.items():
+        # Check if location exist, else add.
+        cursor.execute("SELECT * FROM locations WHERE name == ?", (location,))
+        if not cursor.fetchone():
+            cursor.execute("INSERT INTO locations VALUES (?)", (location, ))
 
-        for location, devices in cached_data.items():
-            # Check if location exist, else add.
-            cursor.execute("SELECT * FROM locations WHERE name == ?", (location,))
+        for device, device_data in devices.items():
+            # Check if device name exist, else add.
+            cursor.execute("SELECT * FROM devices WHERE name == ?", (device,))
             if not cursor.fetchone():
-                cursor.execute("INSERT INTO locations VALUES (?)", (location, ))
-
-            for device, device_data in devices.items():
-                # Check if device name exist, else add.
-                cursor.execute("SELECT * FROM devices WHERE name == ?", (device,))
+                cursor.execute("INSERT INTO devices VALUES (?)", (device, ))
+            # If the data is not new then skip
+            if not device_data.get("new"):
+                continue
+            # Set new as false and get the data.
+            r_conn.set("sensors", f".{location}.{device}.new", False)
+            data: dict = device_data.get("data")  # type:ignore
+            for measurement_type, value in data.items():
+                cursor.execute("SELECT * FROM measureTypes WHERE name == ?", (measurement_type,))
                 if not cursor.fetchone():
-                    cursor.execute("INSERT INTO devices VALUES (?)", (device, ))
-                # If the data is not new then skip
-                if not device_data.get("new"):
-                    continue
-                # Set new as false and get the data.
-                r_conn.set("sensors", f".{location}.{device}.new", False)
-                data: dict = device_data.get("data")  # type:ignore
-                for measurement_type, value in data.items():
-                    cursor.execute("SELECT * FROM measureTypes WHERE name == ?", (measurement_type,))
-                    if not cursor.fetchone():
-                        cursor.execute("INSERT INTO measureTypes VALUES (?)", (measurement_type, ))
-                    cursor.execute("SELECT * FROM deviceMeasures WHERE name == ? AND mtype = ?",
-                                   (device, measurement_type))
-                    if not cursor.fetchone():
-                        cursor.execute("INSERT INTO deviceMeasures VALUES (?,?)", (device, measurement_type))
-                    cursor.execute("INSERT INTO measurements VALUES (?, ?, ?, ?, ?)",
-                                   (location, device, measurement_type, time_now, value))
+                    cursor.execute("INSERT INTO measureTypes VALUES (?)", (measurement_type, ))
+                cursor.execute("SELECT * FROM deviceMeasures WHERE name == ? AND mtype = ?",
+                                (device, measurement_type))
+                if not cursor.fetchone():
+                    cursor.execute("INSERT INTO deviceMeasures VALUES (?,?)", (device, measurement_type))
+                cursor.execute("INSERT INTO measurements VALUES (?, ?, ?, ?, ?)",
+                                (location, device, measurement_type, time_now, value))
     conn.commit()
     cursor.close()
     conn.close()
