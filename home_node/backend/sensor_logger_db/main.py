@@ -54,7 +54,7 @@ def querydb(r_conn: REJSON_Client) -> None:
         cached_data = r_conn.get("sensors")
         if cached_data:
             break
-        sleep(0.1)  # Try again, else let go.
+        sleep(0.1)
 
     # If data is None or empty, or data is not a dict.
     if not cached_data or not isinstance(cached_data, dict):
