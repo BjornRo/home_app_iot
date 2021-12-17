@@ -1,7 +1,5 @@
-import logging
 from redis.commands.json import JSON as REJSON_Client
 from datetime import datetime
-from typing import Optional
 from time import sleep
 import schedule
 import sqlite3
@@ -23,7 +21,7 @@ def check_or_create_db() -> None:
     if isfile(DBFILE):
         return
 
-    # Create db file and import tables, terminates on ";".
+    # Create db file and import tables.
     with open(DB_TABLES, "r") as f:
         sql_script = f.read()
     conn = sqlite3.connect(DBFILE)
@@ -31,7 +29,7 @@ def check_or_create_db() -> None:
     cursor.executescript(sql_script)
     conn.commit()
     cursor.close()
-    conn.close
+    conn.close()
 
 
 def main() -> None:
@@ -49,24 +47,23 @@ def main() -> None:
 
 
 def querydb(r_conn: REJSON_Client) -> None:
-    time_now = datetime.now().isoformat("T", "minutes")
+    time_now = datetime.now().isoformat("T", "seconds")
 
-    # {"sensors": {location: {Device_Name: {measurement: value}}}}
     conn = sqlite3.connect(DBFILE)
     cursor = conn.cursor()
-    cursor.execute(f"INSERT INTO timestamps VALUES ('{time_now}')")
-    mc_data = r_conn.get("sensors")  # type:ignore
-    if mc_data is None:
+    cursor.execute(f"INSERT INTO timestamps VALUES (?)", (time_now,))
+    cached_data = r_conn.get("sensors")
+    if cached_data is None:
         sleep(0.1)  # Try again, else let go.
-        mc_data = r_conn.get("sensors")  # type:ignore
+        cached_data = r_conn.get("sensors")
 
     # Might have gone overboard with extensibility. It can also be dangerous if an adversary gets access.
-    if isinstance(mc_data, dict):
-        mc_data: dict[str, dict]
+    if isinstance(cached_data, dict):
+        cached_data: dict[str, dict]
         devices: dict[str, dict]
         device_data: dict[str, str | dict]
 
-        for location, devices in mc_data.items():
+        for location, devices in cached_data.items():
             # Check if location exist, else add.
             cursor.execute("SELECT * FROM locations WHERE name == ?", (location,))
             if not cursor.fetchone():

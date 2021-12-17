@@ -12,10 +12,10 @@ CREATE TABLE deviceMeasures (
     FOREIGN KEY (mtype) REFERENCES measureTypes (name)
 );
 
-CREATE TABLE timestamps (time VARCHAR(16) NOT NULL PRIMARY KEY);
+CREATE TABLE timestamps (time VARCHAR(19) NOT NULL PRIMARY KEY);
 
 CREATE TABLE measurements (
-    location VARCHAR(10) NOT NULL UNIQUE,
+    location VARCHAR(10) NOT NULL,
     device VARCHAR(10) NOT NULL,
     mtype VARCHAR(10) NOT NULL,
     time VARCHAR(16) NOT NULL,
