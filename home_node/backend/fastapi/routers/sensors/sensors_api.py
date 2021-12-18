@@ -2,12 +2,12 @@ from redis.commands.json import JSON as REJSON_Client
 from fastapi import HTTPException
 from typing import Optional, Dict, Union
 from pydantic import BaseModel
-from . import MyRouterAPI
+from .. import MyRouterAPI
 import redis
 
 # Settings
-PREFIX = "/sensor"
-TAGS = ["sensor_api"]
+PREFIX = "/sensors"
+TAGS = ["sensors_api"]
 
 # To route the routings down the document.
 router = MyRouterAPI(prefix=PREFIX, tags=TAGS).router
