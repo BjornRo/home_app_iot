@@ -3,5 +3,6 @@ uvicorn
 #pydantic
 bcrypt
 redis
-databases
+#databases
 databases[sqlite]
+python-jose[cryptography]
