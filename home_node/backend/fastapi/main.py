@@ -69,7 +69,6 @@ app.add_middleware(
 )
 
 # Naivly add all routes in routes folder, only need to specify the important FastAPI parts.
-# Each router HAS TO HAVE attribute named router
 for dirpath, dirnames, files in os.walk("routers"):
     for module in files:
         if module == "__init__.py":
