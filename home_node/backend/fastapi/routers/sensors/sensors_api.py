@@ -107,4 +107,4 @@ async def api():
     data: Optional[dict] = r_conn.get("sensors")
     if data:
         return data
-    return HTTPException(status_code=204)
+    raise HTTPException(status_code=204)
