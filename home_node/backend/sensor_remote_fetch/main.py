@@ -228,7 +228,7 @@ def block_user(ip: str) -> None:
         else:
             multiplier = 1
         usr_data[4] = (datetime.now() + timedelta(minutes=BAN_TIME * usr_data[1] * multiplier)).isoformat("T")
-    cursor.execute("INSERT OR REPLACE INTO blocklist VALUES (?,?,?,?,?)", usr_data)
+    cursor.execute("INSERT OR REPLACE INTO blocklist VALUES (?,?,?,?,?,?)", usr_data)
     conn.commit()
     cursor.close()
     conn.close()
