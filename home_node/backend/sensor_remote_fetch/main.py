@@ -111,7 +111,6 @@ def socket_handler(device_cred: dict, r_conn: REJSON_Client) -> None:
         conn.close()
         return True
 
-    block_dict = {}
     with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as srv:
         socket.setdefaulttimeout(3)  # For ssl handshake and auth.
         srv.bind(("", S_PORT))
@@ -122,7 +121,7 @@ def socket_handler(device_cred: dict, r_conn: REJSON_Client) -> None:
                     # if timeout, client is not connected.
                     client, (c_ip, c_port) = sslsrv.accept()
                     if is_client_allowed(c_ip, c_port):
-                        Thread(target=client_handler, args=(block_dict, r_conn, device_cred, client), daemon=True).start()
+                        Thread(target=client_handler, args=(r_conn, device_cred, client), daemon=True).start()
                 except Exception as e:  # Don't care about faulty clients with no SSL wrapper.
                     logging.info(timenow() + " > Client tried to connect without SSL context: " + str(e))
 
