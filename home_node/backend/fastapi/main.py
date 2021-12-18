@@ -11,13 +11,6 @@ import os
 
 app = FastAPI()
 
-origins = [  # Internal routing using dnsmasq on my router.
-    "http://localhost",
-    "http://192.168.1.173",
-    "http://home.1d",
-    "http://www.home",
-]
-
 DB_FILE = "/db/main_app_db.db"
 DB_TABLES = """
 CREATE TABLE users (
@@ -41,7 +34,7 @@ async def db_connect():
         return
     # Create db file and import tables if db-file doesn't exist
     await db.execute(query=DB_TABLES)
-    f = open("default_users.json", "r") # desperate for dedenting :(
+    f = open("default_users.json", "r")  # desperate for dedenting :(
     for usr, data in json.load(f).items():
         data |= {"username": usr, "created_date": datetime.now().isoformat("T", "minutes")}
         await db.execute("INSERT INTO users VALUES (:username, :password, :access_level, :created_date, :comment)", data)
@@ -51,6 +44,13 @@ async def db_connect():
 @app.on_event("shutdown")
 async def db_disconnect():
     await db.disconnect()
+
+origins = [  # Internal routing using dnsmasq on my router.
+    "http://localhost",
+    "http://192.168.1.173",
+    "http://home.1d",
+    "http://www.home",
+]
 
 # Load additonal public urls, hiding it at the moment to reduce risk of DoS attack on my own network.
 url: str
