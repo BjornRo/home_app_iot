@@ -193,8 +193,8 @@ def client_handler(r_conn: REJSON_Client, device_cred: dict[str, bytes], client:
         traceback.print_exc()
     except (socket.timeout,) as e:  # This will happen alot. Don't care
         logging.info(timenow() + " > Socket timeout: " + str(e))
-    except Exception as e:  # Just to log if any less important exceptions are raised
-        logging.info(timenow() + " > Exception from client handler: " + str(e))
+    except Exception as e:  # Just to log if any other important exceptions are raised
+        logging.warning(timenow() + " > Exception from client handler: " + str(e))
     try:
         client.close()
     except:
@@ -247,10 +247,10 @@ def parse_and_update(r_conn: REJSON_Client, location_name: str, payload: str) ->
                 return new_dt
             else:
                 logging.info(timenow() + " > Old data sent: " + new_time)
-        except Exception as e:
-            logging.info(timenow() + " > Time validation failed: " + str(e))
         except ValueError as e:
             logging.info(timenow() + " > Time conversion (str -> dt) failed: " + str(e))
+        except Exception as e:
+            logging.info(timenow() + " > Time validation failed: " + str(e))
         return None
 
     # [[key, [temp,2]] , [him,2]]
