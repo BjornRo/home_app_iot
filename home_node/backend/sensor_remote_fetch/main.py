@@ -111,7 +111,7 @@ def socket_handler(device_cred: dict, r_conn: REJSON_Client) -> None:
                 try:
                     # if timeout, client is not connected.
                     client, (c_ip, c_port) = sslsrv.accept()
-                    if is_client_allowed(block_dict, c_ip, c_port):
+                    if is_client_allowed(c_ip, c_port):
                         Thread(target=client_handler, args=(block_dict, r_conn, device_cred, client), daemon=True).start()
                 except Exception as e:  # Don't care about faulty clients with no SSL wrapper.
                     logging.info(timenow() + " > Client tried to connect without SSL context: " + str(e))
