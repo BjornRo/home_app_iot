@@ -41,5 +41,5 @@ for dirpath, dirnames, files in os.walk("routers"):
         # Each module should create a MyRouterAPI object which adds the router to classmethod list
         # This is a very convoluted way to fix the linter to stop yelling at me, and also easier to extend and maintain.
         # The for loop loads all the routers by popping of the stack.
-        import_module('{}.{}'.format(dirpath.replace("\\", "."), module))
+        import_module('{}.{}'.format(dirpath.replace("\\", "."), module[:-3]))
         app.include_router(MyRouterAPI.xs.pop())
