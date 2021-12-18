@@ -1,3 +1,4 @@
+from typing import Optional
 from redis.commands.json import JSON as REJSON_Client
 from datetime import datetime, timedelta
 from configparser import ConfigParser
@@ -7,11 +8,20 @@ from zlib import decompress
 from bcrypt import checkpw
 import traceback
 import argparse
+import sqlite3
 import logging
 import socket
 import redis
 import json
 import ssl
+
+"""
+Blocklist part is under the assumption that summertime/wintertime doesn't exist
+which is bogus. But this is not really critical for this kind of project.
+
+For more sensitive data, absolute time that is not affected by Daylight saving is a must for ban time. I.e unix time
+"""
+
 
 # Replace encoder to not use white space. Default to use isoformat for datetime =>
 #   Since I know the types I'm dumping. If needed custom encoder or an "actual" default function.
@@ -35,11 +45,15 @@ MAX_PAYLOAD_SOCKET = 2048
 # Socket setup
 S_PORT = 42661
 BAN_TIME = 30  # minutes
-MAX_ATTEMPTS = 5
+ATTEMPT_PENALTY = 5
 
 # MISC
 MQTT_HOST = "home.1d"
 REJSON_HOST = "rejson"
+
+# DB
+DB_FILE = "/db/sensor_rf_blocklist.db"
+DB_TABLES = "sql_db_tables.sql"
 
 ##
 parser = argparse.ArgumentParser()
@@ -61,27 +75,30 @@ logging.basicConfig(level=args.loglevel)
 def main() -> None:
     r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=0).json()  # type: ignore
     device_credentials = get_default_credentials()
+    check_or_create_db()
     socket_handler(device_credentials, r_conn)
 
 
 def socket_handler(device_cred: dict, r_conn: REJSON_Client) -> None:
-    def is_client_allowed(block_dict: dict[str, dict], ip_addr: str, port: str) -> bool:
-        bantime: datetime
-        user_data = block_dict.get(ip_addr)
-        if user_data is not None:
-            bantime = user_data.get("time")  # type:ignore
-            if datetime.now() > bantime:
-                block_dict.pop(ip_addr)
-            else:
-                attempts: int = user_data["attempts"] + 1
-                if attempts >= MAX_ATTEMPTS:
-                    user_data["bantime"] = datetime.now() + timedelta(minutes=BAN_TIME*attempts*5)
-                    attempts = MAX_ATTEMPTS
-                elif attempts >= MAX_ATTEMPTS/2:
-                    user_data["bantime"] = datetime.now() + timedelta(minutes=BAN_TIME*attempts*2)
-                user_data["attempts"] = attempts
+    def is_client_allowed(ip_addr: str, port: str) -> bool:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM blocklist WHERE ip = ?", (ip_addr,))
+        user = cursor.fetchone()
+        if user is not None:
+            if user[5] >= datetime.now().isoformat("T"):
+                cursor.close()
+                conn.close()
+                block_user(ip_addr)
                 logging.warning(f"{timenow()} > Tmp banned ip tried to connect: {ip_addr}:{port}")
                 return False
+            elif user[1] >= 1:  # Update: reset attemps.
+                usr_data = list(user)
+                usr_data[1] = 0
+                cursor.execute("INSERT OR REPLACE INTO blocklist VALUES (?,?,?,?,?,?)", usr_data)
+                conn.commit()
+        cursor.close()
+        conn.close()
         return True
 
     block_dict = {}
@@ -100,7 +117,7 @@ def socket_handler(device_cred: dict, r_conn: REJSON_Client) -> None:
                     logging.info(timenow() + " > Client tried to connect without SSL context: " + str(e))
 
 
-def client_handler(block_dict: dict[str, dict], r_conn: REJSON_Client, device_cred: dict[str, bytes], client: ssl.SSLSocket) -> None:
+def client_handler(r_conn: REJSON_Client, device_cred: dict[str, bytes], client: ssl.SSLSocket) -> None:
     def recvall(client:  ssl.SSLSocket, size: int, buf_size=4096) -> bytes:
         received_chunks = []
         remaining = size
@@ -143,8 +160,7 @@ def client_handler(block_dict: dict[str, dict], r_conn: REJSON_Client, device_cr
     try:  # First byte msg len => read rest of msg => parse and validate.
         location_name = validate_user(device_cred, recvall(client, ord(client.recv(1))))
         if location_name is None:
-            block_dict[client.getpeername()[0]] = {"time": datetime.now() + timedelta(minutes=BAN_TIME), "attempts": 1}
-            return
+            return block_user(client.getpeername()[0])
         # POST => Notify that it is ok to send data now. Change timeout to keep connection alive.
         client.settimeout(60)
         client.send(b"OK")
@@ -174,6 +190,39 @@ def client_handler(block_dict: dict[str, dict], r_conn: REJSON_Client, device_cr
         client.close()
     except:
         pass
+
+
+def block_user(ip: str) -> None:
+    curr_time = datetime.now()
+
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM blocklist WHERE ip = ?", (ip,))
+    user: Optional[tuple] = cursor.fetchone()
+    if user is None:
+        usr_data = (
+            ip,
+            1,
+            1,
+            curr_time.isoformat("T"),
+            (curr_time + timedelta(minutes=BAN_TIME)).isoformat("T"),
+            "Initial ban" # Comments are not really useful, we are checking banned_until anyways.
+        )
+    else:  # {cursor.description[i][0]: user[i] for i in range(len(user))}, if for a future dict-usage.
+        usr_data = list(user)
+        usr_data[1] += 1  # Increase number of attempts during banned time.
+        usr_data[2] += 1  # Total attemps
+        if usr_data[1] >= ATTEMPT_PENALTY:
+            multiplier = 5
+        elif usr_data[1] >= ATTEMPT_PENALTY/2:
+            multiplier = 2
+        else:
+            multiplier = 1
+        usr_data[4] = (datetime.now() + timedelta(minutes=BAN_TIME * usr_data[1] * multiplier)).isoformat("T")
+    cursor.execute("INSERT OR REPLACE INTO blocklist VALUES (?,?,?,?,?)", usr_data)
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 
 def parse_and_update(r_conn: REJSON_Client, location_name: str, payload: str) -> bool:
@@ -280,6 +329,23 @@ def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors") -> None:
         is_root = False
         rebuild_path = tmp
     r_conn.set(rootkey, rebuild_path, elem)
+
+
+def check_or_create_db() -> None:
+    # Don't overwrite an existing db-file.
+    from os.path import isfile
+    if isfile(DB_FILE):
+        return
+
+
+    # Create db file and import tables.
+with open(DB_TABLES, "r") as f:
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.executescript(f.read())
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 
 if __name__ == "__main__":

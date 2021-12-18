@@ -9,8 +9,8 @@ import redis
 # Task every:
 TASK_TIMES = (":30", ":00")
 
-# PATH
-DBFILE = "/db/sensor_db.db"
+# DB
+DB_FILE = "/db/sensor_db.db"
 DB_TABLES = "sql_db_tables.sql"
 
 REJSON_HOST = "rejson"
@@ -19,18 +19,17 @@ REJSON_HOST = "rejson"
 def check_or_create_db() -> None:
     # Don't overwrite an existing db-file.
     from os.path import isfile
-    if isfile(DBFILE):
+    if isfile(DB_FILE):
         return
 
     # Create db file and import tables.
     with open(DB_TABLES, "r") as f:
-        sql_script = f.read()
-    conn = sqlite3.connect(DBFILE)
-    cursor = conn.cursor()
-    cursor.executescript(sql_script)
-    conn.commit()
-    cursor.close()
-    conn.close()
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.executescript(f.read())
+        conn.commit()
+        cursor.close()
+        conn.close()
 
 
 def main() -> None:
@@ -60,7 +59,7 @@ def querydb(r_conn: REJSON_Client) -> None:
     if not cached_data or not isinstance(cached_data, dict):
         return
 
-    conn = sqlite3.connect(DBFILE)
+    conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute(f"INSERT INTO timestamps VALUES (?)", (time_now,))
 

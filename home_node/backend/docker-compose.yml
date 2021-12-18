@@ -59,6 +59,7 @@ services:
   sensor_remote_fetch:
     container_name: sensor_remote_fetch
     volumes:
+      - ./appdata/db:/db
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
       - ./appdata/certbot/letsencrypt:/sslcerts
