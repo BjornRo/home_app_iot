@@ -53,7 +53,17 @@ REJSON_HOST = "rejson"
 
 # DB
 DB_FILE = "/db/sensor_rf_blocklist.db"
-DB_TABLES = "sql_db_tables.sql"
+DB_TABLES = """
+CREATE TABLE blocklist (
+    ip VARCHAR(46) NOT NULL,
+    attempts INT NOT NULL,
+    total_attemps INT NOT NULL,
+    first_ban_time VARCHAR(26) NOT NULL,
+    banned_until VARCHAR(26) NOT NULL,
+    comment TEXT NOT NULL,
+    PRIMARY KEY (ip)
+);
+"""
 
 ##
 parser = argparse.ArgumentParser()
@@ -206,7 +216,7 @@ def block_user(ip: str) -> None:
             1,
             curr_time.isoformat("T"),
             (curr_time + timedelta(minutes=BAN_TIME)).isoformat("T"),
-            "Initial ban" # Comments are not really useful, we are checking banned_until anyways.
+            "Initial ban"  # Comments are not really useful, we are checking banned_until anyways.
         )
     else:  # {cursor.description[i][0]: user[i] for i in range(len(user))}, if for a future dict-usage.
         usr_data = list(user)
@@ -337,12 +347,10 @@ def check_or_create_db() -> None:
     if isfile(DB_FILE):
         return
 
-
     # Create db file and import tables.
-with open(DB_TABLES, "r") as f:
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.executescript(f.read())
+    cursor.executescript(DB_TABLES)
     conn.commit()
     cursor.close()
     conn.close()
