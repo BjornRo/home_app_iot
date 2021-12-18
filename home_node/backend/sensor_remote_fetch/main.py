@@ -1,10 +1,10 @@
-from typing import Optional
 from redis.commands.json import JSON as REJSON_Client
 from datetime import datetime, timedelta
 from configparser import ConfigParser
 from threading import Thread
 from ast import literal_eval
 from zlib import decompress
+from typing import Optional
 from bcrypt import checkpw
 import traceback
 import argparse
