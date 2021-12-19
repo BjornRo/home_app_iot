@@ -42,14 +42,15 @@ async def db_connect():
     await db.connect()
 
     # Check if databasefile exists
-    if not isfile(DB_FILE):
-        # Create db file and import tables if db-file doesn't exist
-        await db.execute(query=DB_TABLES)
-        query = "INSERT INTO users VALUES (:username, :password, :access_level, :created_date, :comment)"
-        with open("default_users.json", "r") as f:  # Default user during development. Username: admin, Password: pass
-            for usr, data in json.load(f).items():
-                data |= {"username": usr, "created_date": datetime.now().isoformat("T", "minutes")}
-                await db.execute(query, data)
+    if isfile(DB_FILE):
+        return
+    # Create db file and import tables if db-file doesn't exist
+    await db.execute(query=DB_TABLES)
+    query = "INSERT INTO users VALUES (:username, :password, :access_level, :created_date, :comment)"
+    with open("default_users.json", "r") as f: # {"admin": {"password":"pass", "access_level":"owner", "comment":"development"}}
+        for usr, data in json.load(f).items():
+            data |= {"username": usr, "created_date": datetime.now().isoformat("T", "minutes")}
+            await db.execute(query, data)
 
 
 @app.on_event("shutdown")
