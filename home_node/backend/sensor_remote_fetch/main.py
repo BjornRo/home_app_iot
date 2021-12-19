@@ -275,13 +275,8 @@ def _test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
                 return 90000 <= value <= 115000
     except:
         pass
-    logging.warning(timenow() + " > Bad key in data: " + key + " | value: " + str(value))
+    logging.warning(timenow() + " > Bad key/val in data: " + key + " | value: " + str(value))
     return False
-
-
-def get_default_credentials() -> dict[str, bytes]:
-    return {usr: CFG[usr]["password"].encode() for usr in CFG.sections() if not "cert" == usr.lower()}
-
 
 def _recvall(client:  ssl.SSLSocket, size: int, buf_size=4096) -> bytes:
     received_chunks = []
@@ -329,10 +324,6 @@ def _get_dict(data: dict | list | tuple) -> dict | None:
     return None
 
 
-def timenow() -> str:
-    return datetime.now().isoformat("T")[:22]
-
-
 def _set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors") -> None:
     if r_conn.get(rootkey) is None:
         r_conn.set(rootkey, ".", {})
@@ -346,6 +337,14 @@ def _set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors") -> None
         is_root = False
         rebuild_path = tmp
     r_conn.set(rootkey, rebuild_path, elem)
+
+
+def timenow() -> str:
+    return datetime.now().isoformat("T")[:22]
+
+
+def get_default_credentials() -> dict[str, bytes]:
+    return {usr: CFG[usr]["password"].encode() for usr in CFG.sections() if not "cert" == usr.lower()}
 
 
 def check_or_create_db() -> None:

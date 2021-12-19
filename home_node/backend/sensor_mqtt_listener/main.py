@@ -132,7 +132,7 @@ def test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
                 return 90000 <= value <= 115000
     except:
         pass
-    logging.warning(timenow() + " > Bad key in data: " + key + " | value: " + str(value))
+    logging.warning(timenow() + " > Bad key/val in data: " + key + " | value: " + str(value))
     return False
 
 
