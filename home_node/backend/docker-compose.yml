@@ -8,7 +8,7 @@ x-tz-volume: &tz-volumes
 x-redis-db-sensor-env: &redis-db-env
   environment:
     - DBSENSOR=0
-    - DBCACHE=1
+    - DBUSRCACHE=1
 
 x-cert-volume: &cert-volumes
   volumes:

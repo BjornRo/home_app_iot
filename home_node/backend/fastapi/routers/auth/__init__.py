@@ -1,13 +1,16 @@
+from main import db, SECRET_KEY, ACCESS_LEVELS, REJSON_HOST
 from fastapi import HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timedelta
-from main import db, SECRET_KEY, ACCESS_LEVELS
 from pydantic import BaseModel
 from jose import JWTError, jwt
 from typing import Optional
 import logging
 import bcrypt
+import redis
+import os
 
+r_conn = redis.Redis(host=REJSON_HOST, port=6379, db=int(os.getenv("DBUSRCACHE", "1")))
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
@@ -31,6 +34,9 @@ class User(BaseModel):
 
 class UserInDB(User):
     password: str
+
+
+# TODO add caching of active tokens instead of querying the slow SD-card database.
 
 
 def check_access_level(required_level: str, user_level: str) -> bool:
@@ -77,12 +83,17 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
 
 
 async def get_user_db(username: str) -> UserInDB | None:
-    usrdata = await db.fetch_one(
-        "SELECT username, password, access_level FROM users WHERE username = (:username)",
-        {"username": username})
+    usrdata: Optional[dict] = r_conn.json().get(username)
     if usrdata is None:
-        return None
-    return UserInDB(**{"username": usrdata[0], "password": usrdata[1], "access_level": usrdata[2]})
+        dbusr = await db.fetch_one(
+            "SELECT username, password, access_level FROM users WHERE username = (:username)",
+            {"username": username})
+        if dbusr is None:
+            return None
+        usrdata = {"username": username, "password": dbusr[1], "access_level": dbusr[2]}
+        r_conn.json().set(username, ".", usrdata)
+        r_conn.expire(username, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    return UserInDB(**usrdata)
 
 
 def time_msg(message: str) -> str:

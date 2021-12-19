@@ -34,6 +34,7 @@ CREATE TABLE users (
     created_date VARCHAR(19) NOT NULL,
     comment TEXT NOT NULL
 )"""
+REJSON_HOST = "rejson"
 
 db = Database("sqlite:///" + DB_FILE)
 

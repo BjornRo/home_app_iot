@@ -2,6 +2,7 @@ from redis.commands.json import JSON as REJSON_Client
 from fastapi import HTTPException
 from typing import Optional, Dict, Union
 from pydantic import BaseModel
+from main import REJSON_HOST
 from .. import MyRouterAPI
 import redis
 import os
@@ -17,7 +18,6 @@ TAGS = ["sensors_api"]
 router = MyRouterAPI(prefix=PREFIX, tags=TAGS).router
 
 # Redis json to be able to communicate between the daemon and backend.
-REJSON_HOST = "rejson"
 r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=int(os.getenv("DBSENSOR","0"))).json()
 
 
