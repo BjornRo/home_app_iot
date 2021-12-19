@@ -27,6 +27,9 @@ json._default_encoder = json.JSONEncoder(separators=(",", ":"), default=lambda d
 
 # Ugly imports, premature optimization perhaps. Whatever to make pizw fasterish.
 
+# TODO Dont forget to change connection handshake connecting to home_node
+# TODO Split send only device name and omit everything from '/*', pizw/temp -> pizw
+
 # cfg
 CFG = ConfigParser()
 CFG.read("config.ini")

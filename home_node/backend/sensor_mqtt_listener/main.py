@@ -90,9 +90,9 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client) -> None:
         data = {}
         for key, value in iter_obj:
             # If a device sends bad data -> break and discard, else update
-            if not test_value(key, value):
+            if not test_value(key.lower(), value):
                 break
-            data[key] = value / 100
+            data[key.lower()] = value / 100
         else:
             set_json(r_conn, f".home.{sender}.data", data)
             set_json(r_conn, f".home.{sender}.time", datetime.now().isoformat("T"))
@@ -123,7 +123,7 @@ def get_iterable(recvdata: dict | list | tuple) -> ItemsView | zip[tuple[str, An
 def test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
     try:  # Anything that isn't a number will be rejected by try.
         value *= magnitude
-        match key.lower():
+        match key:
             case "temperature":
                 return -5000 <= value <= 6000
             case "humidity":
@@ -131,7 +131,8 @@ def test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
             case "airpressure":
                 return 90000 <= value <= 115000
     except:
-        logging.warning(timenow() + " > Bad key in data: " + key + " | value: " + str(value))
+        pass
+    logging.warning(timenow() + " > Bad key in data: " + key + " | value: " + str(value))
     return False
 
 
