@@ -249,6 +249,7 @@ def _parse_and_update(r_conn: REJSON_Client, location_name: str, payload: str) -
             if not iter_obj:
                 continue
             data = {}
+            # Validate data and update if all values are ok.
             for data_key, value in iter_obj.items():
                 if not _test_value(data_key.lower(), value, 100):
                     break
@@ -278,6 +279,7 @@ def _test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
     logging.warning(timenow() + " > Bad key/val in data: " + key + " | value: " + str(value))
     return False
 
+
 def _recvall(client:  ssl.SSLSocket, size: int, buf_size=4096) -> bytes:
     received_chunks = []
     remaining = size
@@ -292,35 +294,33 @@ def _recvall(client:  ssl.SSLSocket, size: int, buf_size=4096) -> bytes:
 
 def _validate_time(r_conn: REJSON_Client, r_conn_path: str, new_time: str) -> bool:
     try:
-        #Test if timeformat is valid
+        # Test if timeformat is valid
         datetime.fromisoformat(new_time)
         try:
             # Test if data exists. If not, set a placeholder as time.
             old_time: str = r_conn.get("sensors", r_conn_path)
-        except: #redis.exceptions.ResponseError
+        except:  # redis.exceptions.ResponseError
             _set_json(r_conn, r_conn_path, datetime.min.isoformat("T"))
             return True
         if old_time < new_time:
             return True
         else:
             logging.info(timenow() + " > Old data sent: " + new_time)
-    except ValueError as e:
-        logging.info(timenow() + " > Invalid timeformat sent: " + str(e))
-    except Exception as e:
-        logging.info(timenow() + " > Time validation failed: " + str(e))
-    return True
+    except ValueError:
+        logging.warning(timenow() + " > Invalid timeformat sent: " + str(new_time)[:30])
+    return False
 
 
-# [[key, [temp,2]] , [hum,2]]
+# [[temp, 2], [hum, 2]]
 def _get_dict(data: dict | list | tuple) -> dict | None:
     if isinstance(data, dict):
         return data
     if isinstance(data, (tuple, list)):
         try:
-            return {k.lower(): v for k, v in data}
+            return {k: v for k, v in data}
         except:
             pass
-    logging.warning(timenow() + " > Payload malformed: " + str(data))
+    logging.warning(timenow() + " > Data payload malformed: " + str(data))
     return None
 
 
