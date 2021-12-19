@@ -11,3 +11,6 @@ Frontend: TS - React or Vue\
 Backend: FastAPI
 
 The modules in the background feeds redisjson for the backend to get. 
+
+
+License Free. I have no clue about licensing so just copypaste whatever. PS, if there are usernames/passwords visible, those are just meaningless outside this project development context.
