@@ -46,7 +46,7 @@ async def db_connect():
         # Create db file and import tables if db-file doesn't exist
         await db.execute(query=DB_TABLES)
         query = "INSERT INTO users VALUES (:username, :password, :access_level, :created_date, :comment)"
-        with open("default_users.json", "r") as f: # Default user during development. Username: admin, Password: pass
+        with open("default_users.json", "r") as f:  # Default user during development. Username: admin, Password: pass
             for usr, data in json.load(f).items():
                 data |= {"username": usr, "created_date": datetime.now().isoformat("T", "minutes")}
                 await db.execute(query, data)
@@ -84,8 +84,9 @@ for dirpath, dirnames, files in os.walk("routers"):
     for module in files:
         if "__" in module or "__" in dirpath:
             continue
-        # Each module should create a MyRouterAPI object which adds the router to classmethod list
+        # Each module should create a MyRouterAPI object which adds the routers to a list which the Class contains.
         # This is a very convoluted way to fix the linter to stop yelling at me, and also easier to extend and maintain.
-        # The for loop loads all the routers by popping of the stack.
+        # The for loop loads the module which creates a router and adds to list in class, which we pop off and include to FastAPI.
+        # If we don't want to load a file or folder, simply add __ to it.
         import_module('{}.{}'.format(dirpath.replace("\\", "."), module[:-3]))
         app.include_router(MyRouterAPI.xs.pop())
