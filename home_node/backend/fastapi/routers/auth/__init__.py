@@ -83,8 +83,8 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
 
 
 async def get_user_db(username: str) -> UserInDB | None:
-    usrdata: Optional[dict] = r_conn.json().get(username)
-    if usrdata is None:
+    usrdata = r_conn.json().get(username)
+    if not isinstance(usrdata, dict):
         dbusr = await db.fetch_one(
             "SELECT password, access_level FROM users WHERE username = (:username)",
             {"username": username})
