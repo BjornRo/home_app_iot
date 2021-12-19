@@ -6,19 +6,24 @@ from secrets import token_hex
 from datetime import datetime
 from fastapi import FastAPI
 from os.path import isfile
-
 import json
 import os
 
 
 app = FastAPI()
 
-SECRET_KEY = None
-
 ACCESS_LEVELS = {"owner": 4, "admin": 3, "mod": 2, "user": 1, "disabled": 0}
 
-SECRET_FILE = "secretfile"
-DB_FILE = "/db/main_app_db.db"
+SECRET_KEY_FILE = "secretkeyfile"
+# Check if secret key exists, else randomly generate one.
+if not isfile(SECRET_KEY_FILE):
+    with open(SECRET_KEY_FILE, "w") as f:
+        f.write(token_hex(32))
+with open(SECRET_KEY_FILE, "r") as f:
+    SECRET_KEY = f.read().strip()
+
+
+DB_FILE = "main_app_db.db"  # TODO add /db/
 DB_TABLES = """
 CREATE TABLE users (
     username VARCHAR(20) PRIMARY KEY,
@@ -34,7 +39,6 @@ db = Database("sqlite:///" + DB_FILE)
 
 @app.on_event("startup")
 async def db_connect():
-    global SECRET_KEY
     await db.connect()
 
     # Check if databasefile exists
@@ -42,16 +46,10 @@ async def db_connect():
         # Create db file and import tables if db-file doesn't exist
         await db.execute(query=DB_TABLES)
         query = "INSERT INTO users VALUES (:username, :password, :access_level, :created_date, :comment)"
-        with open("default_users.json", "r") as f:
+        with open("default_users.json", "r") as f: # Default user during development. Username: admin, Password: pass
             for usr, data in json.load(f).items():
                 data |= {"username": usr, "created_date": datetime.now().isoformat("T", "minutes")}
                 await db.execute(query, data)
-    # Check if secret key exists, else randomly generate one.
-    if not isfile(SECRET_FILE):
-        with open(SECRET_FILE, "w") as f:
-            f.write(token_hex(32))
-    with open(SECRET_FILE, "r") as f:
-        SECRET_KEY = f.read().strip()
 
 
 @app.on_event("shutdown")
@@ -84,7 +82,7 @@ app.add_middleware(
 # Naivly add all routes in routes folder, only need to specify the important FastAPI parts.
 for dirpath, dirnames, files in os.walk("routers"):
     for module in files:
-        if module == "__init__.py":
+        if "__" in module or "__" in dirpath:
             continue
         # Each module should create a MyRouterAPI object which adds the router to classmethod list
         # This is a very convoluted way to fix the linter to stop yelling at me, and also easier to extend and maintain.

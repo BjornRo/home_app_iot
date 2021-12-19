@@ -4,5 +4,6 @@ uvicorn
 bcrypt
 redis
 #databases
+python-multipart
 databases[sqlite]
 python-jose[cryptography]
