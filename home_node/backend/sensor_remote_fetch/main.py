@@ -349,8 +349,7 @@ def get_default_credentials() -> dict[str, bytes]:
 
 def check_or_create_db() -> None:
     # Don't overwrite an existing db-file.
-    from os.path import isfile
-    if isfile(DB_FILE):
+    if os.path.isfile(DB_FILE):
         return
 
     # Create db file and import tables.
