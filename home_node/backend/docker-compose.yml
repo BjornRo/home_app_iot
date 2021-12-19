@@ -1,5 +1,16 @@
 version: '3.9'
 
+x-tz-volume: &tz-volumes
+  volumes:
+    - /etc/timezone:/etc/timezone:ro
+    - /etc/localtime:/etc/localtime:ro
+
+x-redis-db-sensor-env: &redis-db-env
+  environment:
+    - DBSENSOR=0
+    - DBCACHE=1
+
+
 services:
   # mqtt:
   #   container_name: mqtt
@@ -14,9 +25,7 @@ services:
       context: ./rejson
       dockerfile: rejson.dockerfile
     restart: always
-    volumes:
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
+    <<: *tz-volumes
     ports:
       - 6379:6379
     command: redis-server --loadmodule librejson.so
@@ -32,10 +41,9 @@ services:
 
   sensor_logger_db:
     container_name: sensor_logger_db
-    volumes:
+    <<: *redis-db-env
+    <<: *tz-volumes
       - ./appdata/db:/db
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
     restart: always
     build:
       context: ./sensor_logger_db
@@ -44,9 +52,8 @@ services:
 
   sensor_mqtt_listener:
     container_name: sensor_mqtt_listener
-    volumes:
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
+    <<: *redis-db-env
+    <<: *tz-volumes
     restart: always
     build:
       context: ./sensor_mqtt_listener
@@ -58,10 +65,9 @@ services:
 
   sensor_remote_fetch:
     container_name: sensor_remote_fetch
-    volumes:
+    <<: *redis-db-env
+    <<: *tz-volumes
       - ./appdata/db:/db
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
       - ./appdata/certbot/letsencrypt:/sslcerts
     restart: always
     build:
@@ -79,10 +85,9 @@ services:
       context: ./fastapi
       dockerfile: fastapi.dockerfile
     command: uvicorn main:app --host 0.0.0.0 --port 8000 #--log-level critical
-    volumes:
-      - ./appdata:/db
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
+    <<: *redis-db-env
+    <<: *tz-volumes
+      - ./appdata/db:/db
     ports:
       - 8000:8000
     depends_on:

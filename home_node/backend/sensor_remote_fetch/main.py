@@ -14,6 +14,7 @@ import socket
 import redis
 import json
 import ssl
+import os
 
 """
 Blocklist part is under the assumption that summertime/wintertime doesn't exist
@@ -83,7 +84,7 @@ logging.basicConfig(level=args.loglevel)
 
 
 def main() -> None:
-    r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=0).json()  # type: ignore
+    r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=int(os.getenv("DBSENSOR","0"))).json()  # type: ignore
     device_credentials = get_default_credentials()
     check_or_create_db()
     socket_handler(device_credentials, r_conn)

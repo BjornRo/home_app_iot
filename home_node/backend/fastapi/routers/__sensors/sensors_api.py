@@ -4,6 +4,10 @@ from typing import Optional, Dict, Union
 from pydantic import BaseModel
 from .. import MyRouterAPI
 import redis
+import os
+
+
+# TODO remove __ from sensors folder
 
 # Settings
 PREFIX = "/sensors"
@@ -14,7 +18,7 @@ router = MyRouterAPI(prefix=PREFIX, tags=TAGS).router
 
 # Redis json to be able to communicate between the daemon and backend.
 REJSON_HOST = "rejson"
-r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=0).json()
+r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=int(os.getenv("DBSENSOR","0"))).json()
 
 
 # Data models

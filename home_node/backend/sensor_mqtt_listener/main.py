@@ -9,6 +9,7 @@ import argparse
 import logging
 import redis
 import json
+import os
 
 # Replace encoder to not use white space. Default to use isoformat for datetime =>
 #   Since I know the types I'm dumping. If needed custom encoder or an "actual" default function.
@@ -40,30 +41,10 @@ args = parser.parse_args()
 logging.basicConfig(level=args.loglevel)
 
 
-def timenow() -> str:
-    return datetime.now().isoformat("T")[:22]
-
-
-# To be able to add stuff to the cache without destroying existing data. Has to create all dicts
-# to be able to add data eventually.
-def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors") -> None:
-    if r_conn.get(rootkey) is None:
-        r_conn.set(rootkey, ".", {})
-
-    rebuild_path = ""
-    is_root = True
-    for p in path.split(".")[1:]:
-        tmp = rebuild_path + "." + p
-        if r_conn.get(rootkey, "." if is_root else rebuild_path).get(p) is None:
-            r_conn.set(rootkey, tmp, {})
-        is_root = False
-        rebuild_path = tmp
-    r_conn.set(rootkey, rebuild_path, elem)
-
 
 def main() -> None:
     mqtt = Client("sensor_mqtt_log")
-    r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=0).json()  # type: ignore
+    r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=int(os.getenv("DBSENSOR","0"))).json()  # type: ignore
 
     # Create default path if redis cache doesnt exist
     # {"sensors": {location: {Device_Name: {measurement: value}}}}
@@ -152,6 +133,28 @@ def test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
     except:
         logging.warning(timenow() + " > Bad key in data: " + key + " | value: " + str(value))
     return False
+
+
+def timenow() -> str:
+    return datetime.now().isoformat("T")[:22]
+
+
+# To be able to add stuff to the cache without destroying existing data. Has to create all dicts
+# to be able to add data eventually.
+def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors") -> None:
+    if r_conn.get(rootkey) is None:
+        r_conn.set(rootkey, ".", {})
+
+    rebuild_path = ""
+    is_root = True
+    for p in path.split(".")[1:]:
+        tmp = rebuild_path + "." + p
+        if r_conn.get(rootkey, "." if is_root else rebuild_path).get(p) is None:
+            r_conn.set(rootkey, tmp, {})
+        is_root = False
+        rebuild_path = tmp
+    r_conn.set(rootkey, rebuild_path, elem)
+
 
 
 if __name__ == "__main__":

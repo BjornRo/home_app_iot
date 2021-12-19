@@ -5,6 +5,7 @@ from time import sleep
 import schedule
 import sqlite3
 import redis
+import os
 
 # Task every:
 TASK_TIMES = (":30", ":00")
@@ -35,7 +36,7 @@ def check_or_create_db() -> None:
 def main() -> None:
     check_or_create_db()
 
-    r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=0).json()  # type: ignore
+    r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=int(os.getenv("DBSENSOR","0"))).json()  # type: ignore
     for t in TASK_TIMES:
         schedule.every().hour.at(t).do(querydb, r_conn=r_conn)
 
