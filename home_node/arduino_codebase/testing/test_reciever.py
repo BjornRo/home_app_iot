@@ -23,7 +23,7 @@ def socketThread(newClient, pidlock, pidlist):
         # Reset timeout
         client.settimeout(TIMEOUT)
         try:
-            #TODO checkpoint, ping back to confirm mess length. Also stopping unsynched messages.
+            #TODo checkpoint, ping back to confirm mess length. Also stopping unsynched messages.
             message = client.recv(40).decode(FORMAT)
             print(f"[{address} | msg]> {message}")
             if message == DISCONNECT_MESSAGE:
