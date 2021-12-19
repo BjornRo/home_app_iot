@@ -1,7 +1,7 @@
 from fastapi import HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timedelta
-from main import db, SECRET_KEY
+from main import db, SECRET_KEY, ACCESS_LEVELS
 from pydantic import BaseModel
 from jose import JWTError, jwt
 from typing import Optional
@@ -31,6 +31,10 @@ class User(BaseModel):
 
 class UserInDB(User):
     password: str
+
+
+def check_access_level(required_level: str, user_level: str) -> bool:
+    return ACCESS_LEVELS[required_level] <= ACCESS_LEVELS[user_level]
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
