@@ -18,9 +18,9 @@ router = MyRouterAPI(prefix=PREFIX, tags=TAGS).router
 # https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/
 
 
-@router.get("/whoami", response_model=User, dependencies=[Depends(get_current_user)])
+@router.get("/whoami", response_model=TokenData, dependencies=[Depends(get_current_user)])
 async def whoami(current_user: UserInDB = Depends(get_current_user)):
-    return User(**{"username": current_user.username, "access_level": current_user.access_level})
+    return TokenData(**{"username": current_user.username})
 
 
 @router.post("/login")
