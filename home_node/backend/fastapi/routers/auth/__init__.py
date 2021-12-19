@@ -86,11 +86,11 @@ async def get_user_db(username: str) -> UserInDB | None:
     usrdata: Optional[dict] = r_conn.json().get(username)
     if usrdata is None:
         dbusr = await db.fetch_one(
-            "SELECT username, password, access_level FROM users WHERE username = (:username)",
+            "SELECT password, access_level FROM users WHERE username = (:username)",
             {"username": username})
         if dbusr is None:
             return None
-        usrdata = {"username": username, "password": dbusr[1], "access_level": dbusr[2]}
+        usrdata = {"username": username, "password": dbusr[0], "access_level": dbusr[1]}
         r_conn.json().set(username, ".", usrdata)
         r_conn.expire(username, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     return UserInDB(**usrdata)
