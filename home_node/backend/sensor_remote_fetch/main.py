@@ -251,7 +251,7 @@ def _parse_and_update(r_conn: REJSON_Client, location_name: str, payload: str) -
             data = {}
             for data_key, value in iter_obj.items():
                 if not _test_value(data_key.lower(), value, 100):
-                    continue
+                    break
                 data[data_key.lower()] = value
             else:
                 _set_json(r_conn, f".{location_name}.{device_key}.data", data)
