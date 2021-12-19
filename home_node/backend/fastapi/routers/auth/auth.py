@@ -19,7 +19,7 @@ router = MyRouterAPI(prefix=PREFIX, tags=TAGS).router
 
 
 @router.get("/whoami", response_model=User, dependencies=[Depends(get_current_user)])
-async def read_users_me(current_user: UserInDB = Depends(get_current_user)):
+async def whoami(current_user: UserInDB = Depends(get_current_user)):
     return User(**{"username": current_user.username, "access_level": current_user.access_level})
 
 
