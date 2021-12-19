@@ -242,7 +242,7 @@ def _parse_and_update(r_conn: REJSON_Client, location_name: str, payload: str) -
         for device_key, (new_time, dev_data) in remote_data.items():
             if new_time is None:
                 continue
-            device_key = device_key.lower()
+            device_key = device_key.split("/")[0].lower()
             if not _validate_time(r_conn, f".{location_name}.{device_key}.time", new_time):
                 continue
             iter_obj = _get_dict(dev_data)
