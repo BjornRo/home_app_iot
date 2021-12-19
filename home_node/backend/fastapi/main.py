@@ -87,10 +87,12 @@ app.add_middleware(
 
 # Naivly add all routes in routes folder, only need to specify the important FastAPI parts.
 for dirpath, _, files in os.walk("routers"):
+    if any(("_" == x[0] for x in dirpath.split("\\"))):
+        continue
     for module in files:
         # Don't load files/folders starting with '_'.
         # Also works as commenting out routings; _routerNameFolder
-        if "_" in module[0] or "_" in dirpath[0]:
+        if module[0] == "_":
             continue
         # Each module should create a MyRouterAPI object which adds the routers to a list which the Class contains.
         # This is a very convoluted way to fix the linter to stop yelling at me, and also easier to extend and maintain.
