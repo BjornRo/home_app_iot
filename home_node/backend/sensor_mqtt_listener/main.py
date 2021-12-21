@@ -41,10 +41,10 @@ args = parser.parse_args()
 logging.basicConfig(level=args.loglevel)
 
 
-
 def main() -> None:
     mqtt = Client("sensor_mqtt_log")
-    r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=int(os.getenv("DBSENSOR","0"))).json()  # type: ignore
+    r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=int(
+        os.getenv("DBSENSOR", "0"))).json()  # type: ignore
 
     # Create default path if redis cache doesnt exist
     # {"sensors": {location: {Device_Name: {measurement: value}}}}
@@ -69,10 +69,10 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client) -> None:
             elif isinstance(listlike, (int, float)):
                 listlike = (listlike,)
             else:
-                logging.warning(timenow() + " > Unknown type received: " + str(listlike)[:26])
+                logging.warning("Unknown type received: " + str(listlike)[:26])
                 return
         except:
-            logging.warning(f"{timenow()} > Bad data received from: {str(msg.topic)} | data: {str(msg.payload)[:26]}")
+            logging.warning(f"Bad data received from: {str(msg.topic)} | data: {str(msg.payload)[:26]}")
             return
 
         # Handle the topic depending on what it is about.
@@ -81,7 +81,7 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client) -> None:
             if not set(listlike).difference(set((0, 1))) and len(listlike) == 4:
                 set_json(r_conn, ".home." + RELAY_STATUS_PATH.replace("/", "."), listlike)
             else:
-                logging.warning(timenow() + " > Status data malformed: " + str(listlike)[:26])
+                logging.warning("Status data malformed: " + str(listlike)[:26])
             return
         iter_obj = get_iterable(listlike)
         if iter_obj is None:
@@ -103,7 +103,7 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client) -> None:
     while True:
         try:  # Wait until mqtt server is connectable. No need to read exceptions here.
             if mqtt.connect(MQTT_HOST, 1883, 60) == 0:
-                logging.info(timenow() + " > Connected to mqtt!")
+                logging.debug("Connected to mqtt!")
                 break
         except:
             pass
@@ -116,7 +116,7 @@ def get_iterable(recvdata: dict | list | tuple) -> ItemsView | zip[tuple[str, An
         return recvdata.items()
     if isinstance(recvdata, (tuple, list)):
         return zip(MINOR_KEYS, recvdata)
-    logging.warning(timenow() + " > Payload malformed at get_iterable: " + str(recvdata)[:26])
+    logging.warning("Payload malformed at get_iterable: " + str(recvdata)[:26])
     return None
 
 
@@ -132,12 +132,8 @@ def test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
                 return 90000 <= value <= 115000
     except:
         pass
-    logging.warning(timenow() + " > Bad key/val in data: " + key + " | value: " + str(value))
+    logging.warning("Bad key/val in data: " + key + " | value: " + str(value))
     return False
-
-
-def timenow() -> str:
-    return datetime.now().isoformat("T")[:22]
 
 
 # To be able to add stuff to the cache without destroying existing data. Has to create all dicts
@@ -155,7 +151,6 @@ def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors") -> None:
         is_root = False
         rebuild_path = tmp
     r_conn.set(rootkey, rebuild_path, elem)
-
 
 
 if __name__ == "__main__":

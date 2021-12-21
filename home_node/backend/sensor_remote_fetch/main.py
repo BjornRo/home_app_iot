@@ -103,7 +103,7 @@ def socket_handler(device_cred: dict, r_conn: REJSON_Client) -> None:
                     if _is_client_allowed(c_ip, c_port):
                         Thread(target=client_handler, args=(r_conn, device_cred, client), daemon=True).start()
                 except Exception as e:  # Don't care about faulty clients with no SSL wrapper.
-                    logging.info(timenow() + " > Client tried to connect without SSL context: " + str(e))
+                    logging.info("Client tried to connect without SSL context: " + str(e))
 
 
 def client_handler(r_conn: REJSON_Client, device_cred: dict[str, bytes], client: ssl.SSLSocket) -> None:
@@ -129,9 +129,9 @@ def client_handler(r_conn: REJSON_Client, device_cred: dict[str, bytes], client:
             if not _parse_and_update(r_conn, location_name, recvdata.decode()):
                 break
     except socket.timeout as e:
-        logging.info(timenow() + " > Socket timeout: " + str(e))
+        logging.info("Socket timeout: " + str(e))
     except Exception as e:  # Just to log if any other important exceptions are raised
-        logging.warning(timenow() + " > Exception from client handler: " + str(e))
+        logging.warning("Exception from client handler: " + str(e))
     try:
         client.close()
     except:
@@ -148,7 +148,7 @@ def _is_client_allowed(ip_addr: str, port: str) -> bool:
             cursor.close()
             conn.close()
             _block_user(ip_addr)
-            logging.warning(f"{timenow()} > Tmp banned ip tried to connect: {ip_addr}:{port}")
+            logging.warning(f"Tmp banned ip tried to connect: {ip_addr}:{port}")
             return False
         elif user[1] >= 1:  # Update: reset attemps.
             usr_data = list(user)
@@ -211,11 +211,11 @@ def _validate_user(client: ssl.SSLSocket, device_cred: dict[str, bytes], data: b
         if checkpw(passwd, hash_passwd):
             return location_name
     except ValueError | UnicodeDecodeError as e:
-        logging.warning(timenow() + " > Value-/UnicodeError in validate_user: " + str(e))
+        logging.warning("Value-/UnicodeError in validate_user: " + str(e))
 
     # If validation fails due to invalid user or an active adversary, then log the event.
     c_addr, c_port = client.getpeername()
-    logging.warning(f"{timenow()} > {c_addr}:{c_port}, tried to connect with data: {str(data)[:24]}...")
+    logging.warning(f"{c_addr}:{c_port}, tried to connect with data: {str(data)[:24]}...")
     return None
 
 
@@ -226,7 +226,7 @@ def _parse_and_update(r_conn: REJSON_Client, location_name: str, payload: str) -
         try:
             remote_data = literal_eval(payload)
         except:
-            logging.warning(timenow() + " > Raw payload malformed: " + str(payload)[:64])
+            logging.warning("Raw payload malformed: " + str(payload)[:64])
             return False
 
     remote_data = _get_dict(remote_data)
@@ -260,7 +260,7 @@ def _parse_and_update(r_conn: REJSON_Client, location_name: str, payload: str) -
                 _set_json(r_conn, f".{location_name}.{device_key}.new", True)
         return True
     except:
-        logging.warning(timenow() + " > Nested data malformed: " + str(remote_data)[:64])
+        logging.warning("Nested data malformed: " + str(remote_data)[:64])
     return False
 
 
@@ -276,7 +276,7 @@ def _test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
                 return 90000 <= value <= 115000
     except:
         pass
-    logging.warning(timenow() + " > Bad key/val in data: " + key + " | value: " + str(value))
+    logging.warning("Bad key/val in data: " + key + " | value: " + str(value))
     return False
 
 
@@ -305,9 +305,9 @@ def _validate_time(r_conn: REJSON_Client, r_conn_path: str, new_time: str) -> bo
         if old_time < new_time:
             return True
         else:
-            logging.info(timenow() + " > Old data sent: " + new_time)
+            logging.info(" > Old data sent: " + new_time)
     except ValueError:
-        logging.warning(timenow() + " > Invalid timeformat sent: " + str(new_time)[:30])
+        logging.warning("Invalid timeformat sent: " + str(new_time)[:30])
     return False
 
 
@@ -320,7 +320,7 @@ def _get_dict(data: dict | list | tuple) -> dict | None:
             return {k: v for k, v in data}
         except:
             pass
-    logging.warning(timenow() + " > Data payload malformed: " + str(data))
+    logging.warning("Data payload malformed: " + str(data))
     return None
 
 
@@ -337,10 +337,6 @@ def _set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors") -> None
         is_root = False
         rebuild_path = tmp
     r_conn.set(rootkey, rebuild_path, elem)
-
-
-def timenow() -> str:
-    return datetime.now().isoformat("T")[:22]
 
 
 def get_default_credentials() -> dict[str, bytes]:

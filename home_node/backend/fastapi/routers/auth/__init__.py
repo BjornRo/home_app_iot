@@ -54,7 +54,7 @@ async def validate_user(username: str, password: str) -> UserInDB | None:
     # Check if there is any rows of the user and then check password. Log failed attempts
     if usrdata and bcrypt.checkpw(password.encode(), usrdata.password.encode()):
         return usrdata
-    logging.warning(time_msg("Failed login. User: " + username + " | Pass: " + password))
+    logging.warning("Failed login. User: " + username + " | Pass: " + password)
     return None
 
 
@@ -94,7 +94,3 @@ async def get_user_db(username: str) -> UserInDB | None:
         r_conn.json().set(username, ".", usrdata)
         r_conn.expire(username, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     return UserInDB(**usrdata)
-
-
-def time_msg(message: str) -> str:
-    return datetime.now().isoformat("T")[:22] + " > " + message
