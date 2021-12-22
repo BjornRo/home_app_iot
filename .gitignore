@@ -60,3 +60,6 @@ private_encode.py
 # Ignore the ignore
 !requirements.txt
 !librejson.so
+!package.json
+!tsconfig.json
+!package-lock.json

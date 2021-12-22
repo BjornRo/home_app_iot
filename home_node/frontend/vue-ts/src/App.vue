@@ -1,19 +1,23 @@
 <template>
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+    integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC"
+    crossorigin="anonymous"
+  />
   <div id="app">
     <NavBar />
-    <div class="main container">
-      <router-view/>
-    </div>
+    <router-view/>
   </div>
 </template>
 
-<script>
-import NavBar from '@/components/NavBar.vue'
+<script lang="ts">
+import NavBar from "./components/NavBar.vue";
 export default {
   components: {
-    NavBar
-  }
-}
+    NavBar,
+  },
+};
 </script>
 
 <style>
@@ -26,4 +30,5 @@ export default {
 .main {
   padding-top: 5em;
 }
+
 </style>

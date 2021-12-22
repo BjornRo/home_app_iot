@@ -12,9 +12,6 @@
               <router-link class="nav-link" to="/">Home</router-link>
             </li>
             <li class="nav-item">
-              <router-link class="nav-link" to="/dashboard">Dashboard</router-link>
-            </li>
-            <li class="nav-item">
               <router-link class="nav-link" to="/profile">My Profile</router-link>
             </li>
             <li class="nav-item">
@@ -24,9 +21,6 @@
           <ul v-else class="navbar-nav me-auto mb-2 mb-md-0">
             <li class="nav-item">
               <router-link class="nav-link" to="/">Home</router-link>
-            </li>
-            <li class="nav-item">
-              <router-link class="nav-link" to="/register">Register</router-link>
             </li>
             <li class="nav-item">
               <router-link class="nav-link" to="/login">Log In</router-link>
@@ -41,17 +35,17 @@
 <script>
 export default {
   name: 'NavBar',
-  computed: {
-    isLoggedIn: function() {
-      return this.$store.getters.isAuthenticated;
-    }
-  },
-  methods: {
-    async logout () {
-      await this.$store.dispatch('logOut');
-      this.$router.push('/login');
-    }
-  },
+//   computed: {
+//     isLoggedIn: function() {
+//       return this.$store.getters.isAuthenticated;
+//     }
+//   },
+//   methods: {
+//     async logout () {
+//       await this.$store.dispatch('logOut');
+//       this.$router.push('/login');
+//     }
+//   },
 }
 </script>
 

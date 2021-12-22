@@ -34,7 +34,7 @@ async def sensor_resp():
                 "time": "2021-12-31T13:37:59.12345",
                 "new": True,
                 "data": {
-                    "temperature": 42,
+                    "temperature": 42.1,
                     "humidity": 33.4,
                 }
             },
@@ -42,14 +42,14 @@ async def sensor_resp():
                 "time": "2021-12-31T00:13:37.12345",
                 "new": True,
                 "data": {
-                    "temperature": -42,
+                    "temperature": -42.4,
                 }
             },
             "kitchen": {
                 "time": "2021-12-31T11:13:37.12345",
                 "new": True,
                 "data": {
-                    "temperature": -42,
+                    "temperature": -42.3,
                     "humidity": 99.9,
                     "airpressure": 1024.64
                 }
@@ -58,7 +58,7 @@ async def sensor_resp():
         "remote_sh": {
             "pizw": {
                 "time": "2021-12-31T13:37:59.12345",
-                "new": True,
+                "new": False,
                 "data": {
                     "temperature": 42,
                 }
