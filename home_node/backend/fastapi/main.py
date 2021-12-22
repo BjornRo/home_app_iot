@@ -34,7 +34,7 @@ CREATE TABLE users (
     created_date VARCHAR(19) NOT NULL,
     comment TEXT NOT NULL
 )"""
-REJSON_HOST = "rejson"
+REJSON_HOST = "localhost" # TODO change to rejson later
 
 db = Database("sqlite:///" + DB_FILE)
 

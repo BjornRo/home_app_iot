@@ -23,8 +23,8 @@ async def whoami(current_user: UserInDB = Depends(get_current_user)):
     return TokenData(**{"username": current_user.username})
 
 
-@router.post("/login")
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+@router.post("/token")
+async def token(form_data: OAuth2PasswordRequestForm = Depends()):
     user = await validate_user(form_data.username, form_data.password)
     if not user:
         raise HTTPException(
