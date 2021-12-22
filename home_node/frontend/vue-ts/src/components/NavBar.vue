@@ -36,13 +36,7 @@
       </div>
     </div>
   </nav>
-
-  <LoginModal @close="toggleModal" :modalActive="modalActive">
-    <div class="log-modal-content">
-      <h1>Modal header</h1>
-      <p>message modal</p>
-    </div>
-  </LoginModal>
+  <LoginModal @toggle="toggleModal" :modalActive="modalActive" />
 </template>
 
 <script>
