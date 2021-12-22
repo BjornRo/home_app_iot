@@ -1,17 +1,13 @@
 import Vue from 'vue';
-// import VueRouter from 'vue-router';
+import VueRouter from 'vue-router';
 
 import store from '@/store';
 
-// import Dashboard from '@/views/Dashboard';
-// import EditNote from '@/views/EditNote';
-import Home from '@/views/Home.vue';
-// import Login from '@/views/Login';
-// import Note from '@/views/Note';
-// import Profile from '@/views/Profile';
-// import Register from '@/views/Register';
-
-Vue.use(VueRouter);
+import Dashboard from '../views/Dashboard.vue';
+import Home from '../views/Home.vue';
+import Login from '../views/Login.vue';
+import Profile from '../views/Profile.vue';
+import Register from '../views/Register.vue';
 
 const routes = [
   {
@@ -20,12 +16,12 @@ const routes = [
     component: Home,
   },
   {
-    path: '/register',
+    path: '/auth/register',
     name: 'Register',
     component: Register,
   },
   {
-    path: '/login',
+    path: '/auth/login',
     name: 'Login',
     component: Login,
   },
@@ -40,20 +36,6 @@ const routes = [
     name: 'Profile',
     component: Profile,
     meta: {requiresAuth: true},
-  },
-  {
-    path: '/note/:id',
-    name: 'Note',
-    component: Note,
-    meta: {requiresAuth: true},
-    props: true,
-  },
-  {
-    path: '/editnote/:id',
-    name: 'EditNote',
-    component: EditNote,
-    meta: {requiresAuth: true},
-    props: true,
   }
 ]
 
