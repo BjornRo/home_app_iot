@@ -1,18 +1,19 @@
 <template>
-  <img alt="Vue logo" src="./assets/logo.png">
-  <HelloWorld msg="Welcome to Your Vue.js + TypeScript App"/>
+  <div id="app">
+    <NavBar />
+    <div class="main container">
+      <!-- <router-view/> -->
+    </div>
+  </div>
 </template>
 
-<script lang="ts">
-import { Options, Vue } from 'vue-class-component';
-import HelloWorld from './components/HelloWorld.vue';
-
-@Options({
+<script>
+import NavBar from '@/components/NavBar.vue'
+export default {
   components: {
-    HelloWorld,
-  },
-})
-export default class App extends Vue {}
+    NavBar
+  }
+}
 </script>
 
 <style>
@@ -20,8 +21,9 @@ export default class App extends Vue {}
   font-family: Avenir, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-align: center;
   color: #2c3e50;
-  margin-top: 60px;
+}
+.main {
+  padding-top: 5em;
 }
 </style>
