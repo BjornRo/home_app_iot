@@ -1,5 +1,9 @@
 version: '3.9'
 
+# TODO make actual production docker file
+# https://docs.docker.com/compose/production/
+# https://docs.docker.com/compose/extends/#different-environments
+
 x-tz-volume: &tz-volumes
   volumes:
     - /etc/timezone:/etc/timezone:ro
@@ -88,7 +92,7 @@ services:
     build:
       context: ./fastapi
       dockerfile: fastapi.dockerfile
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 #--log-level critical
+    command: uvicorn main:app --reload --host 0.0.0.0 --port 8000 #--log-level critical
     <<: *redis-db-env
     <<: *tz-volumes
       - ./appdata/db:/db

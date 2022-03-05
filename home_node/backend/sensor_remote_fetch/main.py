@@ -65,22 +65,6 @@ CREATE TABLE blocklist (
 );
 """
 
-##
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    '-d', '--debug',
-    help="Print lots of debugging statements",
-    action="store_const", dest="loglevel", const=logging.DEBUG,
-    default=logging.WARNING,
-)
-parser.add_argument(
-    '-v', '--verbose',
-    help="Be verbose",
-    action="store_const", dest="loglevel", const=logging.INFO,
-)
-args = parser.parse_args()
-logging.basicConfig(level=args.loglevel)
-
 
 def main() -> None:
     r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=int(
@@ -358,4 +342,21 @@ def check_or_create_db() -> None:
 
 
 if __name__ == "__main__":
+    # Logging
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-d', '--debug',
+        help="Print lots of debugging statements",
+        action="store_const", dest="loglevel", const=logging.DEBUG,
+        default=logging.WARNING,
+    )
+    parser.add_argument(
+        '-v', '--verbose',
+        help="Be verbose",
+        action="store_const", dest="loglevel", const=logging.INFO,
+    )
+    args = parser.parse_args()
+    logging.basicConfig(level=args.loglevel)
     main()
