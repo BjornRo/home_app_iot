@@ -15,6 +15,10 @@ import os
 from os.path import basename, isfile
 import sys
 
+import db_models
+from db import SessionLocal, engine
+
+db_models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
@@ -24,6 +28,13 @@ REJSON_HOST = "rejson"
 r_conn: REJSON_Client = redis.Redis(
     host=REJSON_HOST, port=6379, db=int(os.getenv("DBSENSOR", "0"))
 ).json()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 origins = [  # Internal routing using dnsmasq on my router.

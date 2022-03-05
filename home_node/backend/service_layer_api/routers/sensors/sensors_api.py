@@ -1,6 +1,7 @@
 import logging
-from ._func import _set_json, _test_value, _transform_to_dict
+from . import _func as f
 from .. import MyRouterAPI
+from contextlib import suppress
 from main import r_conn
 from datetime import datetime
 from fastapi import HTTPException, Response
@@ -15,11 +16,27 @@ TAGS = ["sensors_api"]
 router = MyRouterAPI(prefix=PREFIX, tags=TAGS).router
 
 
+@router.post("/db")
+async def insert_db(data: dict):
+    pass
+
+
 # Routing
 @router.get("/")
 async def root():
     data: dict | None = r_conn.get("sensors")
     if data:
+        return data
+    raise HTTPException(status_code=404)
+
+
+# Routing
+@router.get("/data")
+async def get_sensor_data():
+    data: dict | None = r_conn.get("sensors")
+    if data:
+        with suppress(KeyError):
+            del data['home']['balcony']['relay']
         return data
     raise HTTPException(status_code=404)
 
@@ -31,19 +48,19 @@ async def get_data(location: str, device: str):
 
 @router.post("/{location}/{device}")
 async def post_data(location: str, device: str, data: dict | list | int | float | str):
-    data_dict = _transform_to_dict(data)
+    data_dict = f._transform_to_dict(data)
     if data_dict is not None:
         new_data = {}
         for k, v in data_dict.items():
-            value = _test_value(location, k, v)
+            value = f._test_value(location, k, v)
             if value is None:
                 data_dict = None
                 break
             new_data[k] = value
         else:
-            _set_json(r_conn, f".home.{device}.data", new_data)
-            _set_json(r_conn, f".home.{device}.time", datetime.utcnow().isoformat("T"))
-            _set_json(r_conn, f".home.{device}.new", True)
+            f._set_json(r_conn, f".home.{device}.data", new_data)
+            f._set_json(r_conn, f".home.{device}.time", datetime.utcnow().isoformat("T"))
+            f._set_json(r_conn, f".home.{device}.new", True)
     if data_dict is None:
         logging.warning(f"Sensors data malformed: {device}, {str(data)[:15]}")
     return Response(status_code=204)
@@ -52,7 +69,7 @@ async def post_data(location: str, device: str, data: dict | list | int | float 
 @router.post("/home/balcony/relay/status")
 async def post_relay_status(data: List[int]):
     if not set(data).difference(set((0, 1))) and len(data) == 4:
-        _set_json(r_conn, ".home.balcony.relay.status", data)
+        f._set_json(r_conn, ".home.balcony.relay.status", data)
     else:
         logging.warning("Status data malformed: " + str(data)[:26])
     return Response(status_code=204)
