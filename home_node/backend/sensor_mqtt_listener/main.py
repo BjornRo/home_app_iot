@@ -5,7 +5,6 @@ from datetime import datetime
 from ast import literal_eval
 from typing import Any
 from time import sleep
-import argparse
 import logging
 import redis
 import json
@@ -23,22 +22,6 @@ RELAY_STATUS_PATH = "balcony/relay/status"
 # Misc
 MQTT_HOST = "home.1d"
 REJSON_HOST = "rejson"
-
-##
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    '-d', '--debug',
-    help="Print lots of debugging statements",
-    action="store_const", dest="loglevel", const=logging.DEBUG,
-    default=logging.WARNING,
-)
-parser.add_argument(
-    '-v', '--verbose',
-    help="Be verbose",
-    action="store_const", dest="loglevel", const=logging.INFO,
-)
-args = parser.parse_args()
-logging.basicConfig(level=args.loglevel)
 
 
 def main() -> None:
@@ -154,4 +137,21 @@ def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors") -> None:
 
 
 if __name__ == "__main__":
+    # Logging
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-d', '--debug',
+        help="Print lots of debugging statements",
+        action="store_const", dest="loglevel", const=logging.DEBUG,
+        default=logging.WARNING,
+    )
+    parser.add_argument(
+        '-v', '--verbose',
+        help="Be verbose",
+        action="store_const", dest="loglevel", const=logging.INFO,
+    )
+    args = parser.parse_args()
+    logging.basicConfig(level=args.loglevel)
     main()
