@@ -1,4 +1,4 @@
-FROM python:alpine
+FROM python:slim
 
 ENV CONTAINER_HOME=/app
 

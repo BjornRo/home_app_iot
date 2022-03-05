@@ -1,92 +1,47 @@
-from redis.commands.json import JSON as REJSON_Client
-from collections.abc import ItemsView
 from paho.mqtt.client import Client
-from datetime import datetime
 from ast import literal_eval
-from typing import Any
 from time import sleep
+import requests
 import logging
-import redis
-import json
-import os
 
-# Replace encoder to not use white space. Default to use isoformat for datetime =>
-#   Since I know the types I'm dumping. If needed custom encoder or an "actual" default function.
-json._default_encoder = json.JSONEncoder(  # type: ignore
-    separators=(",", ":"), default=lambda dt: dt.isoformat())
 
-MINOR_KEYS = ("temperature", "humidity", "airpressure")
-SUB_TOPICS = ["bikeroom/temp", "balcony/temphumid", "kitchen/temphumidpress"]
 RELAY_STATUS_PATH = "balcony/relay/status"
+SUB_TOPICS = ["bikeroom/temp", "balcony/temphumid", "kitchen/temphumidpress", RELAY_STATUS_PATH]
 
 # Misc
 MQTT_HOST = "home.1d"
-REJSON_HOST = "rejson"
+SERVICE_API = "http://service_layer_api:8000/sensors/home"
 
 
 def main() -> None:
     mqtt = Client("sensor_mqtt_log")
-    r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=int(
-        os.getenv("DBSENSOR", "0"))).json()  # type: ignore
 
-    # Create default path if redis cache doesnt exist
-    # {"sensors": {location: {Device_Name: {measurement: value}}}}
-    for i in SUB_TOPICS:
-        set_json(r_conn, ".home." + i.split("/")[0], {})
-    set_json(r_conn, ".home.balcony.relay", {})
-
-    mqtt_agent(mqtt, r_conn)
+    mqtt_agent(mqtt)
 
 
-def mqtt_agent(mqtt: Client, r_conn: REJSON_Client) -> None:
+def mqtt_agent(mqtt: Client) -> None:
     def on_connect(client, *_):
-        client.subscribe("home/" + RELAY_STATUS_PATH)
         for topic in SUB_TOPICS:
             client.subscribe("home/" + topic)
 
     def on_message(_client, _userdata, msg) -> None:
-        try:  # Get values into a listlike form - Test valid payload.
-            listlike = literal_eval(msg.payload.decode())
-            if isinstance(listlike, (tuple, dict, list)):
-                pass
-            elif isinstance(listlike, (int, float)):
-                listlike = (listlike,)
-            else:
-                logging.warning("Unknown type received: " + str(listlike)[:26])
-                return
-        except:
-            logging.warning(f"Bad data received from: {str(msg.topic)} | data: {str(msg.payload)[:26]}")
-            return
-
-        # Handle the topic depending on what it is about.
         topic: str = msg.topic.replace("home/", "")
-        if RELAY_STATUS_PATH == topic:  # Test topic. Remove all 0,1. Set should be empty to be valid.
-            if not set(listlike).difference(set((0, 1))) and len(listlike) == 4:
-                set_json(r_conn, ".home." + RELAY_STATUS_PATH.replace("/", "."), listlike)
+        try:
+            data: dict | str | list | tuple = literal_eval(msg.payload.decode())
+
+            if topic == RELAY_STATUS_PATH:
+                _post_data(topic, data)
             else:
-                logging.warning("Status data malformed: " + str(listlike)[:26])
-            return
-        iter_obj = get_iterable(listlike)
-        if iter_obj is None:
-            return
-        sender = topic.split("/")[0]
-        data = {}
-        for key, value in iter_obj:
-            # If a device sends bad data -> break and discard, else update
-            if not test_value(key.lower(), value):
-                break
-            data[key.lower()] = value / 100
-        else:
-            set_json(r_conn, f".home.{sender}.data", data)
-            set_json(r_conn, f".home.{sender}.time", datetime.now().isoformat("T"))
-            set_json(r_conn, f".home.{sender}.new", True)
+                _post_data(topic.split("/")[0], data)
+        except:
+            logging.warning(f'Bad data from: {topic.split("/")[0]}, data: {str(msg.payload)[:26]}')
 
     mqtt.on_connect = on_connect
     mqtt.on_message = on_message
     while True:
         try:  # Wait until mqtt server is connectable. No need to read exceptions here.
             if mqtt.connect(MQTT_HOST, 1883, 60) == 0:
-                logging.debug("Connected to mqtt!")
+                logging.info("Connected to mqtt!")
                 break
         except:
             pass
@@ -94,46 +49,8 @@ def mqtt_agent(mqtt: Client, r_conn: REJSON_Client) -> None:
     mqtt.loop_forever()
 
 
-def get_iterable(recvdata: dict | list | tuple) -> ItemsView | zip[tuple[str, Any]] | None:
-    if isinstance(recvdata, dict) and all([i.lower() in MINOR_KEYS for i in recvdata.keys()]):
-        return recvdata.items()
-    if isinstance(recvdata, (tuple, list)):
-        return zip(MINOR_KEYS, recvdata)
-    logging.warning("Payload malformed at get_iterable: " + str(recvdata)[:26])
-    return None
-
-
-def test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
-    try:  # Anything that isn't a number will be rejected by try.
-        value *= magnitude
-        match key:
-            case "temperature":
-                return -5000 <= value <= 6000
-            case "humidity":
-                return 0 <= value <= 10000
-            case "airpressure":
-                return 90000 <= value <= 115000
-    except:
-        pass
-    logging.warning("Bad key/val in data: " + key + " | value: " + str(value))
-    return False
-
-
-# To be able to add stuff to the cache without destroying existing data. Has to create all dicts
-# to be able to add data eventually.
-def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors") -> None:
-    if r_conn.get(rootkey) is None:
-        r_conn.set(rootkey, ".", {})
-
-    rebuild_path = ""
-    is_root = True
-    for p in path.split(".")[1:]:
-        tmp = rebuild_path + "." + p
-        if r_conn.get(rootkey, "." if is_root else rebuild_path).get(p) is None:
-            r_conn.set(rootkey, tmp, {})
-        is_root = False
-        rebuild_path = tmp
-    r_conn.set(rootkey, rebuild_path, elem)
+def _post_data(webpath: str, data: dict | str | list | tuple) -> requests.Response:
+    return requests.post(SERVICE_API + "/" + webpath, json=data)
 
 
 if __name__ == "__main__":
@@ -142,16 +59,23 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '-d', '--debug',
+        "-d",
+        "--debug",
         help="Print lots of debugging statements",
-        action="store_const", dest="loglevel", const=logging.DEBUG,
+        action="store_const",
+        dest="loglevel",
+        const=logging.DEBUG,
         default=logging.WARNING,
     )
     parser.add_argument(
-        '-v', '--verbose',
+        "-v",
+        "--verbose",
         help="Be verbose",
-        action="store_const", dest="loglevel", const=logging.INFO,
+        action="store_const",
+        dest="loglevel",
+        const=logging.INFO,
     )
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel)
+
     main()

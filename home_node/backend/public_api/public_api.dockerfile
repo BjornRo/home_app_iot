@@ -1,9 +1,9 @@
 FROM python:slim
 
-ENV CONTAINER_HOME=/
+ENV CONTAINER_HOME=/app
 
-ADD . $CONTAINER_HOME
 WORKDIR $CONTAINER_HOME
+COPY requirements.txt $CONTAINER_HOME
 
 RUN pip install --no-cache --upgrade pip setuptools
 RUN pip install --no-cache-dir -r requirements.txt

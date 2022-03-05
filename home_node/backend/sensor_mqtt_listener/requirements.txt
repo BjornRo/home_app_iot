@@ -1,2 +1,2 @@
 paho_mqtt
-redis
+requests

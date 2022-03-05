@@ -34,7 +34,7 @@ CFG.read("config.ini")
 
 # SSL Context
 HOSTNAME = CFG["CERT"]["url"]
-SSLPATH = f"/sslcerts/live/{HOSTNAME}/"
+SSLPATH = f"/etc/letsencrypt/live/{HOSTNAME}/"
 SSLPATH_TUPLE = (SSLPATH + "fullchain.pem", SSLPATH + "privkey.pem")
 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 context.load_cert_chain(*SSLPATH_TUPLE)

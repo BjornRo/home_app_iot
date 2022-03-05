@@ -14,10 +14,9 @@ x-redis-db-sensor-env: &redis-db-env
     - DBSENSOR=0
     - DBUSRCACHE=1
 
-x-cert-volume: &cert-volumes
-  volumes:
-    - ./appdata/certbot/letsencrypt:/etc/letsencrypt
-    - ./appdata/certbot/www:/var/www/certbot
+# x-cert-volume: &cert-volumes
+#   - ./appdata/certbot/letsencrypt:/etc/letsencrypt
+#   - ./appdata/certbot/www:/var/www/certbot
 
 services:
   # mqtt:
@@ -38,6 +37,81 @@ services:
       - 6379:6379
     command: redis-server --loadmodule librejson.so
 
+  # sensor_logger_db:
+  #   container_name: sensor_logger_db
+  #   <<: *redis-db-env
+  #   <<: *tz-volumes
+  #     - ./appdata/db:/db
+  #   restart: always
+  #   build:
+  #     context: ./sensor_logger_db
+  #     dockerfile: sensor_logger_db.dockerfile
+  #   command: python3 main.py --verbose
+
+  sensor_mqtt_listener:
+    container_name: sensor_mqtt_listener
+    <<: *redis-db-env
+    <<: *tz-volumes
+    volumes:
+      - ./sensor_mqtt_listener:/app
+    restart: always
+    build:
+      context: ./sensor_mqtt_listener
+      dockerfile: sensor_mqtt_listener.dockerfile
+    depends_on:
+      - rejson
+      - service_layer_api
+    command: python3 main.py --verbose
+
+  service_layer_api:
+    container_name: service_layer_api
+    restart: always
+    build:
+      context: ./service_layer_api
+      dockerfile: service_layer_api.dockerfile
+    command: uvicorn main:app --reload --host 0.0.0.0 --port 8000 --log-level warning
+    <<: *redis-db-env
+    <<: *tz-volumes
+    volumes:
+      - ./appdata/db:/db
+      - ./service_layer_api:/app
+    ports:
+      - 9090:8000
+    depends_on:
+      - rejson
+
+  # sensor_remote_fetch:
+  #   container_name: sensor_remote_fetch
+  #   <<: *redis-db-env
+  #   <<: *tz-volumes
+  #     - ./appdata/db:/db
+  #     - ./appdata/certbot/letsencrypt:/sslcerts
+  #   restart: always
+  #   build:
+  #     context: ./sensor_remote_fetch
+  #     dockerfile: sensor_remote_fetch.dockerfile
+  #   depends_on:
+  #     - rejson
+  #   #  - mqtt
+  #   command: python3 main.py --verbose
+
+  # public_api:
+  #   container_name: public_api
+  #   restart: always
+  #   build:
+  #     context: ./public_api
+  #     dockerfile: public_api.dockerfile
+  #   command: uvicorn main:app --reload --host 0.0.0.0 --port 8000 #--log-level critical
+  #   <<: *redis-db-env
+  #   <<: *tz-volumes
+  #     - ./appdata/db:/db
+  #     - ./public_api:/app
+  #   ports:
+  #     - 8000:8000
+  #   depends_on:
+  #     - sensor_mqtt_listener
+
+
   # ddns:
   #   container_name: ddns
   #   restart: always
@@ -46,60 +120,6 @@ services:
   #     dockerfile: ddns.dockerfile
   #   command: python3 main.py wlan0 --hrs 2
   #   network_mode: host
-
-  sensor_logger_db:
-    container_name: sensor_logger_db
-    <<: *redis-db-env
-    <<: *tz-volumes
-      - ./appdata/db:/db
-    restart: always
-    build:
-      context: ./sensor_logger_db
-      dockerfile: sensor_logger_db.dockerfile
-    command: python3 main.py --verbose
-
-  sensor_mqtt_listener:
-    container_name: sensor_mqtt_listener
-    <<: *redis-db-env
-    <<: *tz-volumes
-    restart: always
-    build:
-      context: ./sensor_mqtt_listener
-      dockerfile: sensor_mqtt_listener.dockerfile
-    depends_on:
-      - rejson
-    #  - mqtt
-    command: python3 main.py --verbose
-
-  sensor_remote_fetch:
-    container_name: sensor_remote_fetch
-    <<: *redis-db-env
-    <<: *tz-volumes
-      - ./appdata/db:/db
-      - ./appdata/certbot/letsencrypt:/sslcerts
-    restart: always
-    build:
-      context: ./sensor_remote_fetch
-      dockerfile: sensor_remote_fetch.dockerfile
-    depends_on:
-      - rejson
-    #  - mqtt
-    command: python3 main.py --verbose
-
-  fastapi:
-    container_name: fastapi
-    restart: always
-    build:
-      context: ./fastapi
-      dockerfile: fastapi.dockerfile
-    command: uvicorn main:app --reload --host 0.0.0.0 --port 8000 #--log-level critical
-    <<: *redis-db-env
-    <<: *tz-volumes
-      - ./appdata/db:/db
-    ports:
-      - 8000:8000
-    depends_on:
-      - sensor_mqtt_listener
 
   # nginx:
   #   container_name: nginx

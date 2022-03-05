@@ -7,6 +7,7 @@ from datetime import datetime
 from fastapi import FastAPI
 from os.path import isfile
 import json
+import pathlib
 import os
 
 
@@ -34,7 +35,7 @@ CREATE TABLE users (
     created_date VARCHAR(19) NOT NULL,
     comment TEXT NOT NULL
 )"""
-REJSON_HOST = "localhost" # TODO change to rejson later
+REJSON_HOST = "rejson"
 
 db = Database("sqlite:///" + DB_FILE)
 
@@ -87,15 +88,19 @@ app.add_middleware(
 
 # Naivly add all routes in routes folder, only need to specify the important FastAPI parts.
 for dirpath, _, files in os.walk("routers"):
-    if any(("_" == x[0] for x in dirpath.split("\\"))):
+    path = pathlib.Path(dirpath)
+    # Ignore folders with _
+    if path.match("_*"):
         continue
+
+    # Find loadable modules without _
     for module in files:
         # Don't load files/folders starting with '_'.
         # Also works as commenting out routings; _routerNameFolder
-        if module[0] == "_":
+        if module.startswith("_"):
             continue
         # Each module should create a MyRouterAPI object which adds the routers to a list which the Class contains.
         # This is a very convoluted way to fix the linter to stop yelling at me, and also easier to extend and maintain.
         # The for loop loads the module which creates a router and adds to list in class, which we pop off and include to FastAPI.
-        import_module('{}.{}'.format(dirpath.replace("\\", "."), module[:-3]))
+        import_module(f'{path.as_posix().replace("/", ".")}.{module.replace(".py", "")}')
         app.include_router(MyRouterAPI.xs.pop())
