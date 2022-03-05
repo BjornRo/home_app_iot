@@ -3,6 +3,7 @@
 .vscode
 out/
 trash/
+appdata/
 duckdns/
 __pycache__/
 certbot/
