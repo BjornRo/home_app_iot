@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-from json import dumps as jsondumps
 import json
 from glob import glob
 from configparser import ConfigParser
@@ -7,9 +6,9 @@ from bmemcached import Client as mClient
 from time import sleep
 from textwrap import dedent
 from zlib import compress, decompress
+import zlib
 
 # from jsonpickle import encode as jpencode
-# from zlib import compress
 import tarfile
 from io import BytesIO
 import ssl
@@ -103,11 +102,11 @@ def main():
         #  devicename/measurements: for each measurement type: value.
         # New value is a flag to know if value has been updated since last SQL-query. -> Each :00, :30
         tmpdata = {
-            "pizw/temp": {"Temperature": -99},
+            "pizw/temp": {"temperature": -99},
             "hydrofor/temphumidpress": {
-                "Temperature": -99,
-                "Humidity": -99,
-                "Airpressure": -99,
+                "temperature": -99,
+                "humidity": -99,
+                "airpressure": -99,
             },
         }
         new_values = {key: False for key in tmpdata}  # For DB-query
@@ -143,8 +142,8 @@ async def socket_send_data(tmpdata, last_update):
     async def client(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         try:
             # Send credentials, login and token.
-            login_cred = BDEV_NAME + b'\n' + BTOKEN
-            writer.write(len(login_cred).to_bytes(1, 'big') + login_cred)
+            login_cred = BDEV_NAME + b"\n" + BTOKEN
+            writer.write(len(login_cred).to_bytes(1, "big") + login_cred)
             await writer.drain()
             # If server doesn't reply with ok something has gone wrong. Otherwise just loop until
             # connection fails. Then an exception is thrown and function terminates.
@@ -154,11 +153,17 @@ async def socket_send_data(tmpdata, last_update):
             writer.write(b"P")
             await writer.drain()
             result = await asyncio.wait_for(reader.readexactly(OK), timeout=5) == b"OK"
+            # TODO change from list to dict: "time": time, "data": data
             while result:
-                payload = compress(
-                    jsondumps({dev: (last_update[dev], val) for dev, val in tmpdata.items()}).encode()
+                payload = zlib.compress(
+                    json.dumps(
+                        {
+                            dev.split("/")[0]: [last_update[dev], val]
+                            for dev, val in tmpdata.items()
+                        }
+                    ).encode()
                 )
-                writer.write(len(payload).to_bytes(3, 'big') + payload)
+                writer.write(len(payload).to_bytes(3, "big") + payload)
                 await writer.drain()
                 await asyncio.sleep(10)
         except:
@@ -223,7 +228,7 @@ async def socket_server(tmpdata_last_update):
                 elif command == b"F":
                     data = DB_FILE.encode() + b"\n" + await get_data_selector("F")
                 if data is not None:
-                    writer.write(len(data).to_bytes(3, 'big') + data)
+                    writer.write(len(data).to_bytes(3, "big") + data)
                     await writer.drain()
         except:
             pass
@@ -361,7 +366,9 @@ async def querydb(tmpdata: dict, new_values: dict):
         await asyncio.sleep((nt - dt).total_seconds())
         # If timer gone too fast and there are seconds left, wait the remaining time, else continue.
         if (remain := (nt - datetime.now()).total_seconds()) > 0:
-            print("DB-timer gone too fast", file=sys.stderr) # Maybe too careful. Lets log it and see!
+            print(
+                "DB-timer gone too fast", file=sys.stderr
+            )  # Maybe too careful. Lets log it and see!
             await asyncio.sleep(remain)
         if not any(new_values.values()):
             continue
