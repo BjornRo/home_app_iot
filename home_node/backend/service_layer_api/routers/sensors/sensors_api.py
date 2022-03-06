@@ -1,5 +1,4 @@
 import logging
-from unicodedata import name
 from . import _func as f
 from .. import MyRouterAPI
 from contextlib import suppress
