@@ -22,3 +22,5 @@ class Measurements(Location):
     time: TimeStamp
     value: float
 
+    class Config:
+        orm_mode = True

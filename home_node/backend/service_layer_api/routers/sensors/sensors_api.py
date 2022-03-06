@@ -1,12 +1,15 @@
 import logging
+from unicodedata import name
 from . import _func as f
 from .. import MyRouterAPI
 from contextlib import suppress
-from main import r_conn
+from main import r_conn, get_db
 from datetime import datetime
-from fastapi import HTTPException, Response
-from typing import List
-
+from fastapi import Depends, HTTPException, Response
+from typing import List, Dict
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from . import _crud, _schemas
 
 # Settings
 PREFIX = "/sensors"
@@ -16,9 +19,22 @@ TAGS = ["sensors_api"]
 router = MyRouterAPI(prefix=PREFIX, tags=TAGS).router
 
 
-@router.post("/db")
-async def insert_db(data: dict):
-    pass
+class MeasurementData(BaseModel):
+    __root__: Dict[str, float | int]
+
+
+class Data(BaseModel):
+    data: MeasurementData
+    time: datetime
+    new: bool
+
+
+class DeviceData(BaseModel):
+    __root__: Dict[str, Data]
+
+
+class LocationSensorData(BaseModel):
+    __root__: Dict[str, DeviceData]
 
 
 # Routing
@@ -36,7 +52,7 @@ async def get_sensor_data():
     data: dict | None = r_conn.get("sensors")
     if data:
         with suppress(KeyError):
-            del data['home']['balcony']['relay']
+            del data["home"]["balcony"]["relay"]
         return data
     raise HTTPException(status_code=404)
 
@@ -78,3 +94,32 @@ async def post_relay_status(data: List[int]):
 @router.get("/home/balcony/relay/status")
 async def get_relay_status():
     return r_conn.get("sensors", ".home.balcony.relay.status")
+
+
+# Insert data to database
+@router.post("/db")
+async def insert_db(data: LocationSensorData, db: Session = Depends(get_db)):
+    curr_time = datetime.utcnow()
+    _crud.add_timestamp(db, _schemas.TimeStamp(time=curr_time))
+    for location in data.__root__:
+        if _crud.get_location(db, name=location) is None:
+            _crud.add_location(db, name=location)
+        for device in data.__root__[location].__root__:
+            if _crud.get_device(db, name=device) is None:
+                _crud.add_device(db, name=device)
+            if data.__root__[location].__root__[device].new:
+                for key, value in data.__root__[location].__root__[device].data.__root__.items():
+                    if _crud.get_mtype(db, name=key) is None:
+                        _crud.add_mtype(db, name=key)
+                    _crud.add_measurement(
+                        db,
+                        _schemas.Measurements(
+                            name=location,
+                            device=_schemas.Device(name=device),
+                            mtype=_schemas.MeasureType(name=key),
+                            time=_schemas.TimeStamp(time=curr_time),
+                            value=value,
+                        ),
+                    )
+                f._set_json(r_conn, f".{location}.{device}.new", False)
+    return Response(status_code=204)

@@ -37,16 +37,16 @@ services:
       - 6379:6379
     command: redis-server --loadmodule librejson.so
 
-  # sensor_logger_db:
-  #   container_name: sensor_logger_db
-  #   <<: *redis-db-env
-  #   <<: *tz-volumes
-  #     - ./appdata/db:/db
-  #   restart: always
-  #   build:
-  #     context: ./sensor_logger_db
-  #     dockerfile: sensor_logger_db.dockerfile
-  #   command: python3 main.py --verbose
+  sensor_logger_db:
+    container_name: sensor_logger_db
+    <<: *redis-db-env
+    <<: *tz-volumes
+      - ./appdata/db:/db
+    restart: always
+    build:
+      context: ./sensor_logger_db
+      dockerfile: sensor_logger_db.dockerfile
+    command: python3 main.py --verbose
 
   sensor_mqtt_listener:
     container_name: sensor_mqtt_listener

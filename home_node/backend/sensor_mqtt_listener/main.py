@@ -13,7 +13,7 @@ MQTT_HOST = "home.1d"
 SERVICE_API = "http://service_layer_api:8000/sensors/home"
 
 
-def main() -> None:
+def main():
     mqtt = Client("sensor_mqtt_log")
 
     mqtt_agent(mqtt)

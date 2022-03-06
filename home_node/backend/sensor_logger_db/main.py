@@ -1,45 +1,19 @@
-from redis.commands.json import JSON as REJSON_Client
-from datetime import datetime
-from typing import Optional
 from time import sleep
 import logging
 import schedule
-import sqlite3
-import redis
-import os
+import requests
 
 # Task every:
 TASK_TIMES = (":30", ":00")
 
-# DB
-DB_FILE = "/db/sensor_db.db"
-DB_TABLES = "sql_db_tables.sql"
-
-REJSON_HOST = "rejson"
+SERVICE_API = "http://service_layer_api:8000/sensors"
 
 
-def check_or_create_db() -> None:
-    # Don't overwrite an existing db-file.
-    from os.path import isfile
-    if isfile(DB_FILE):
-        return
+def main():
+    logging.info("Sensor_logger started")
 
-    # Create db file and import tables.
-    with open(DB_TABLES, "r") as f:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        cursor.executescript(f.read())
-        conn.commit()
-        cursor.close()
-        conn.close()
-
-
-def main() -> None:
-    check_or_create_db()
-
-    r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=int(os.getenv("DBSENSOR","0"))).json()  # type: ignore
     for t in TASK_TIMES:
-        schedule.every().hour.at(t).do(querydb, r_conn=r_conn)
+        schedule.every().hour.at(t).do(querydb)
 
     while 1:
         schedule.run_pending()
@@ -48,45 +22,13 @@ def main() -> None:
             sleep(sleeptime)
 
 
-def querydb(r_conn: REJSON_Client) -> None:
-    time_now = datetime.now().isoformat("T", "seconds")
-    cached_data: Optional[dict[str, dict]] = None
-    for _ in range(2):  # Two attempts to get the data otherwise ignore.
-        cached_data = r_conn.get("sensors")
-        if cached_data:
-            break
+def querydb() -> None:
+    for _ in range(2):
+        resp = requests.get(SERVICE_API + "/data")
+        if resp:
+            requests.post(SERVICE_API + "/db", json=resp.json())
+            return
         sleep(0.1)
-
-    # If data is None or empty, or data is not a dict.
-    if not cached_data or not isinstance(cached_data, dict):
-        return
-
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute(f"INSERT INTO timestamps VALUES (?)", (time_now,))
-
-    # Might have gone overboard with extensibility. It can also be dangerous if an adversary gets access.
-    devices: dict[str, dict]
-    device_data: dict[str, str | dict]
-    for location, devices in cached_data.items():
-        # Check if location exist, else add.
-        cursor.execute("INSERT OR IGNORE INTO locations VALUES (?)", (location, ))
-
-        for device, device_data in devices.items():
-            # If the data is not new then skip.
-            if not device_data.get("new"):
-                continue
-            cursor.execute("INSERT OR IGNORE INTO devices VALUES (?)", (device, ))
-            # Set new as false and get the data.
-            r_conn.set("sensors", f".{location}.{device}.new", False)
-            for measurement_type, value in device_data.get("data").items():  # type:ignore
-                cursor.execute("INSERT OR IGNORE INTO measureTypes VALUES (?)", (measurement_type, ))
-                cursor.execute("INSERT OR IGNORE INTO deviceMeasures VALUES (?,?)", (device, measurement_type))
-                cursor.execute("INSERT OR IGNORE INTO measurements VALUES (?, ?, ?, ?, ?)",
-                               (location, device, measurement_type, time_now, value))
-    conn.commit()
-    cursor.close()
-    conn.close()
 
 
 if __name__ == "__main__":
@@ -95,15 +37,21 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '-d', '--debug',
+        "-d",
+        "--debug",
         help="Print lots of debugging statements",
-        action="store_const", dest="loglevel", const=logging.DEBUG,
+        action="store_const",
+        dest="loglevel",
+        const=logging.DEBUG,
         default=logging.WARNING,
     )
     parser.add_argument(
-        '-v', '--verbose',
+        "-v",
+        "--verbose",
         help="Be verbose",
-        action="store_const", dest="loglevel", const=logging.INFO,
+        action="store_const",
+        dest="loglevel",
+        const=logging.INFO,
     )
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel)
