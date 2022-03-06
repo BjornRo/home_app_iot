@@ -3,12 +3,16 @@ from . import _func as f
 from .. import MyRouterAPI
 from contextlib import suppress
 from main import r_conn, get_db
-from datetime import datetime
-from fastapi import Depends, HTTPException, Response
+from datetime import date, datetime
+from fastapi import Depends, HTTPException, Response, Request
+from fastapi.responses import JSONResponse
 from typing import List, Dict
+from ast import literal_eval
+import json
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from . import _crud, _schemas
+import redis
 
 # Settings
 PREFIX = "/sensors"
@@ -56,34 +60,79 @@ async def get_sensor_data():
     raise HTTPException(status_code=404)
 
 
+@router.post("/{location}")
+async def post_location_data(location: str, request: Request):
+    data_string = (await request.body()).decode()
+    try:
+        payload = json.loads(data_string)
+    except:
+        try:
+            payload = literal_eval(data_string)
+        except:
+            return None
+    if isinstance(payload, list) and len(payload) == 2:
+        payload = {payload[0]: payload[1]}
+
+    if not isinstance(payload, dict):
+        return JSONResponse(
+            status_code=400, content={"message": "Invalid data sent, should be json"}
+        )
+
+    resp = Response(status_code=400)
+    for device, list_or_dict in payload.items():
+        if not isinstance(device, str):
+            continue
+
+        if isinstance(list_or_dict, list) and len(list_or_dict) == 2:
+            datadict = {"time": list_or_dict[0], "data": list_or_dict[1]}
+        elif isinstance(list_or_dict, dict):
+            datadict = {k.lower(): v for k, v in list_or_dict.items()}
+        else:
+            return JSONResponse(
+                status_code=400, content={"message": "Invalid device data sent, should be json"}
+            )
+
+        result = await post_data(location, device, datadict)
+        if result.status_code == 204:
+            resp = result
+    return resp
+
+
 @router.get("/{location}/{device}")
 async def get_data(location: str, device: str):
     return r_conn.get("sensors", f".{location}.{device}")
 
 
 @router.post("/{location}/{device}")
-async def post_data(location: str, device: str, data: dict | list | int | float | str):
-    data_dict = f._transform_to_dict(data)
-    if data_dict is not None:
-        with suppress(Exception):
-            if location == "home" or f._validate_time(r_conn, location, device, data_dict['time']):
+async def post_data(location: str, device: str, data: dict):
+    time = data.get("time")
+    payload = data.get("data")
+    if time is None or payload is None:
+        return JSONResponse(
+            status_code=400,
+            content={"message": "time and/or data, key is missing from device_key"},
+        )
+    data_dict = f._transform_to_dict(payload)
+    if f._validate_time(r_conn, location, device, time):
+        if data_dict is not None:
+            with suppress(Exception):
                 new_data = {}
                 for k, v in data_dict.items():
-                    value = f._test_value(location, k, v)
+                    value = f._test_adjust_value(location, k, v)
                     if value is None:
                         logging.warning(f"Sensors invalid value: {device}, {k}: {v}")
                         break
                     new_data[k] = value
                 else:
                     f._set_json(r_conn, f".{location}.{device}.data", new_data)
-                    f._set_json(r_conn, f".{location}.{device}.time", datetime.utcnow().isoformat("T"))
+                    f._set_json(r_conn, f".{location}.{device}.time", time)
                     f._set_json(r_conn, f".{location}.{device}.new", True)
-            else:
-                logging.warning(f"Sensor data, old: {device}, {str(data_dict['time'])[:15]}")
-                return Response(status_code=204)
+                    return Response(status_code=204)
+        else:
+            logging.warning(f"Sensors data malformed: {device}, {str(data)[:20]}")
     else:
-        logging.warning(f"Sensors data malformed: {device}, {str(data)[:15]}")
-    return Response(status_code=204)
+        logging.warning(f"Old data sent: {device}, {time[:20]}")
+    return Response(status_code=400)
 
 
 @router.post("/home/balcony/relay/status")
@@ -92,12 +141,15 @@ async def post_relay_status(data: List[int]):
         f._set_json(r_conn, ".home.balcony.relay.status", data)
     else:
         logging.warning("Status data malformed: " + str(data)[:26])
+        return Response(status_code=400)
     return Response(status_code=204)
 
 
 @router.get("/home/balcony/relay/status")
 async def get_relay_status():
-    return r_conn.get("sensors", ".home.balcony.relay.status")
+    with suppress(redis.exceptions.ResponseError):
+        return r_conn.get("sensors", ".home.balcony.relay.status")
+    return JSONResponse(status_code=503, content={"message": "Relay status redis data is missing"})
 
 
 # Insert data to database

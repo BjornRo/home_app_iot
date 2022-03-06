@@ -1,8 +1,10 @@
-from paho.mqtt.client import Client
 from ast import literal_eval
+from datetime import datetime
+from paho.mqtt.client import Client
 from time import sleep
-import requests
+import json
 import logging
+import requests
 
 
 RELAY_STATUS_PATH = "balcony/relay/status"
@@ -10,7 +12,7 @@ SUB_TOPICS = ["bikeroom/temp", "balcony/temphumid", "kitchen/temphumidpress", RE
 
 # Misc
 MQTT_HOST = "home.1d"
-SERVICE_API = "http://service_layer_api:8000/sensors/home"
+SERVICE_API = "http://service_layer_api:8000/sensors/home/"
 
 
 def main():
@@ -27,12 +29,15 @@ def mqtt_agent(mqtt: Client) -> None:
     def on_message(_client, _userdata, msg) -> None:
         topic: str = msg.topic.replace("home/", "")
         try:
-            data: dict | str | list | tuple = literal_eval(msg.payload.decode())
+            try:
+                data = json.loads(msg.payload)
+            except:
+                data = literal_eval(msg.payload.decode())
 
             if topic == RELAY_STATUS_PATH:
                 _post_data(topic, data)
             else:
-                _post_data(topic.split("/")[0], data)
+                _post_data(topic.split("/")[0], {"time": datetime.utcnow().isoformat(), "data": data})
         except:
             logging.warning(f'Bad data from: {topic.split("/")[0]}, data: {str(msg.payload)[:26]}')
 
@@ -50,7 +55,7 @@ def mqtt_agent(mqtt: Client) -> None:
 
 
 def _post_data(webpath: str, data: dict | str | list | tuple) -> requests.Response:
-    return requests.post(SERVICE_API + "/" + webpath, json=data)
+    return requests.post(SERVICE_API + webpath, json=data)
 
 
 if __name__ == "__main__":

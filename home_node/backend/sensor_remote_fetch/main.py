@@ -1,16 +1,13 @@
-from redis.commands.json import JSON as REJSON_Client
 from datetime import datetime, timedelta
 from configparser import ConfigParser
 from threading import Thread
 from ast import literal_eval
 from zlib import decompress
-from typing import Optional
 from bcrypt import checkpw
-import argparse
+import requests
 import sqlite3
 import logging
 import socket
-import redis
 import json
 import ssl
 import os
@@ -21,6 +18,8 @@ which is bogus. But this is not really critical for this kind of project.
 
 For more sensitive data, absolute time that is not affected by Daylight saving is a must for ban time. I.e unix time
 """
+
+SERVICE_API = "http://service_layer_api:8000/sensors/"
 
 
 # Replace encoder to not use white space. Default to use isoformat for datetime =>
@@ -108,7 +107,7 @@ def client_handler(device_cred: dict[str, bytes], client: ssl.SSLSocket) -> None
                 recvdata = decompress(recvdata)
             except:  # Test if data is compressed, else it is not -> ignore.
                 pass
-            if not _parse_and_update(location_name, recvdata.decode()):
+            if not _send_to_service_layer(location_name, recvdata.decode()):
                 break
     except socket.timeout as e:
         logging.info("Socket timeout: " + str(e))
@@ -148,7 +147,7 @@ def _block_user(ip: str) -> None:
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM blocklist WHERE ip = ?", (ip,))
-    user: Optional[tuple] = cursor.fetchone()
+    user: tuple | None = cursor.fetchone()
     if user is None:
         usr_data = (
             ip,
@@ -201,65 +200,13 @@ def _validate_user(client: ssl.SSLSocket, device_cred: dict[str, bytes], data: b
     return None
 
 
-def _parse_and_update(location_name: str, payload: str) -> bool:
-    try:  # First test if it's a valid json object
-        remote_data = json.loads(payload)
-    except:  # Else fallback to literal eval
-        try:
-            remote_data = literal_eval(payload)
-        except:
-            logging.warning("Raw payload malformed: " + str(payload)[:64])
-            return False
-
-    remote_data = _get_dict(remote_data)
-    if remote_data is None:
+def _send_to_service_layer(location_name: str, payload: str) -> bool:
+    #{'pizw': ("2014-12-12T12:44:44.123", {'Temperature': 44.2}), 'hydrofor': (None, {'Temperature': -99, 'Humidity': -99, 'Airpressure': -99})}
+    if requests.post(SERVICE_API + location_name, data=payload).status_code >= 400:
+        logging.warning("Bad data sent from: " + location_name + ", " + payload[:20])
         return False
-
-    device_key: str
-    new_time: str | None
-    dev_data: dict
-    # {'pizw': ("2014-12-12T12:44:44.123", {'Temperature': 44.2}),
-    # 'hydrofor': (None, {'Temperature': -99, 'Humidity': -99, 'Airpressure': -99})}
-    try:
-        for device_key, (new_time, dev_data) in remote_data.items():
-            if new_time is None:
-                continue
-            device_key = device_key.split("/")[0].lower()
-            if not _validate_time(r_conn, f".{location_name}.{device_key}.time", new_time):
-                continue
-            iter_obj = _get_dict(dev_data)
-            if not iter_obj:
-                continue
-            data = {}
-            # Validate data and update if all values are ok.
-            for data_key, value in iter_obj.items():
-                if not _test_value(data_key.lower(), value, 100):
-                    break
-                data[data_key.lower()] = value
-            else:
-                _set_json(r_conn, f".{location_name}.{device_key}.data", data)
-                _set_json(r_conn, f".{location_name}.{device_key}.time", new_time)
-                _set_json(r_conn, f".{location_name}.{device_key}.new", True)
+    else:
         return True
-    except:
-        logging.warning("Nested data malformed: " + str(remote_data)[:64])
-    return False
-
-
-def _test_value(key: str, value: int | float, magnitude: int = 1) -> bool:
-    try:  # Anything that isn't a number will be rejected by try.
-        value *= magnitude
-        match key:
-            case "temperature":
-                return -5000 <= value <= 6000
-            case "humidity":
-                return 0 <= value <= 10000
-            case "airpressure":
-                return 90000 <= value <= 115000
-    except:
-        pass
-    logging.warning("Bad key/val in data: " + key + " | value: " + str(value))
-    return False
 
 
 def _recvall(client:  ssl.SSLSocket, size: int, buf_size=4096) -> bytes:
@@ -273,18 +220,6 @@ def _recvall(client:  ssl.SSLSocket, size: int, buf_size=4096) -> bytes:
         remaining -= len(received)
     return b''.join(received_chunks)
 
-
-# [[temp, 2], [hum, 2]]
-def _get_dict(data: dict | list | tuple) -> dict | None:
-    if isinstance(data, dict):
-        return data
-    if isinstance(data, (tuple, list)):
-        try:
-            return {k: v for k, v in data}
-        except:
-            pass
-    logging.warning("Data payload malformed: " + str(data))
-    return None
 
 def get_default_credentials() -> dict[str, bytes]:
     return {usr: CFG[usr]["password"].encode() for usr in CFG.sections() if not "cert" == usr.lower()}
