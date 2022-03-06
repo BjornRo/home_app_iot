@@ -1,8 +1,12 @@
 from ast import literal_eval
+from datetime import datetime
 from redis.commands.json import JSON as REJSON_Client
+import redis
+from contextlib import suppress
 
 # Has to be in order due to shape of data. [temp, humid, airpressure].
 MINOR_KEYS = ("temperature", "humidity", "airpressure")
+
 
 def _transform_to_dict(data: dict | list | int | float | str) -> dict | None:
     if isinstance(data, dict):
@@ -26,6 +30,7 @@ def _transform_to_dict(data: dict | list | int | float | str) -> dict | None:
         return None
 
     return {k: v for k, v in zip(MINOR_KEYS, data)}
+
 
 # Tests and transforms data to suitable range
 def _test_value(location: str, key: str, value: int | float) -> int | float | None:
@@ -58,7 +63,23 @@ def _test_value(location: str, key: str, value: int | float) -> int | float | No
     return None
 
 
-def _set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors") -> None:
+def _validate_time(r_conn: REJSON_Client, location: str, device: str, new_time: str) -> bool:
+    path = f".{location}.{device}.time"
+    with suppress(ValueError):
+        # Test if timeformat is valid
+        new_dt = datetime.fromisoformat(new_time)
+        try:
+            # Test if data exists. If not, set a placeholder as time.
+            old_time = datetime.fromisoformat(r_conn.get("sensors", path))
+            if old_time < new_dt:
+                return True
+        except redis.exceptions.ResponseError | ValueError:
+            _set_json(r_conn, path, datetime.min.isoformat("T"))
+            return True
+    return False
+
+
+def _set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors"):
     if r_conn.get(rootkey) is None:
         r_conn.set(rootkey, ".", {})
 

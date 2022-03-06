@@ -67,14 +67,12 @@ CREATE TABLE blocklist (
 
 
 def main() -> None:
-    r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=int(
-        os.getenv("DBSENSOR", "0"))).json()  # type: ignore
     device_credentials = get_default_credentials()
     check_or_create_db()
-    socket_handler(device_credentials, r_conn)
+    socket_handler(device_credentials)
 
 
-def socket_handler(device_cred: dict, r_conn: REJSON_Client) -> None:
+def socket_handler(device_cred: dict) -> None:
     with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as srv:
         socket.setdefaulttimeout(3)  # For ssl handshake and auth.
         srv.bind(("", S_PORT))
@@ -85,12 +83,12 @@ def socket_handler(device_cred: dict, r_conn: REJSON_Client) -> None:
                     # if timeout, client is not connected.
                     client, (c_ip, c_port) = sslsrv.accept()
                     if _is_client_allowed(c_ip, c_port):
-                        Thread(target=client_handler, args=(r_conn, device_cred, client), daemon=True).start()
+                        Thread(target=client_handler, args=(device_cred, client), daemon=True).start()
                 except Exception as e:  # Don't care about faulty clients with no SSL wrapper.
                     logging.info("Client tried to connect without SSL context: " + str(e))
 
 
-def client_handler(r_conn: REJSON_Client, device_cred: dict[str, bytes], client: ssl.SSLSocket) -> None:
+def client_handler(device_cred: dict[str, bytes], client: ssl.SSLSocket) -> None:
     try:
         location_name = _validate_user(client, device_cred, _recvall(client, ord(client.recv(1))))
         if location_name is None:
@@ -110,7 +108,7 @@ def client_handler(r_conn: REJSON_Client, device_cred: dict[str, bytes], client:
                 recvdata = decompress(recvdata)
             except:  # Test if data is compressed, else it is not -> ignore.
                 pass
-            if not _parse_and_update(r_conn, location_name, recvdata.decode()):
+            if not _parse_and_update(location_name, recvdata.decode()):
                 break
     except socket.timeout as e:
         logging.info("Socket timeout: " + str(e))
@@ -203,7 +201,7 @@ def _validate_user(client: ssl.SSLSocket, device_cred: dict[str, bytes], data: b
     return None
 
 
-def _parse_and_update(r_conn: REJSON_Client, location_name: str, payload: str) -> bool:
+def _parse_and_update(location_name: str, payload: str) -> bool:
     try:  # First test if it's a valid json object
         remote_data = json.loads(payload)
     except:  # Else fallback to literal eval
@@ -276,25 +274,6 @@ def _recvall(client:  ssl.SSLSocket, size: int, buf_size=4096) -> bytes:
     return b''.join(received_chunks)
 
 
-def _validate_time(r_conn: REJSON_Client, r_conn_path: str, new_time: str) -> bool:
-    try:
-        # Test if timeformat is valid
-        datetime.fromisoformat(new_time)
-        try:
-            # Test if data exists. If not, set a placeholder as time.
-            old_time: str = r_conn.get("sensors", r_conn_path)
-        except:  # redis.exceptions.ResponseError
-            _set_json(r_conn, r_conn_path, datetime.min.isoformat("T"))
-            return True
-        if old_time < new_time:
-            return True
-        else:
-            logging.info(" > Old data sent: " + new_time)
-    except ValueError:
-        logging.warning("Invalid timeformat sent: " + str(new_time)[:30])
-    return False
-
-
 # [[temp, 2], [hum, 2]]
 def _get_dict(data: dict | list | tuple) -> dict | None:
     if isinstance(data, dict):
@@ -306,22 +285,6 @@ def _get_dict(data: dict | list | tuple) -> dict | None:
             pass
     logging.warning("Data payload malformed: " + str(data))
     return None
-
-
-def _set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors") -> None:
-    if r_conn.get(rootkey) is None:
-        r_conn.set(rootkey, ".", {})
-
-    rebuild_path = ""
-    is_root = True
-    for p in path.split(".")[1:]:
-        tmp = rebuild_path + "." + p
-        if r_conn.get(rootkey, "." if is_root else rebuild_path).get(p) is None:
-            r_conn.set(rootkey, tmp, {})
-        is_root = False
-        rebuild_path = tmp
-    r_conn.set(rootkey, rebuild_path, elem)
-
 
 def get_default_credentials() -> dict[str, bytes]:
     return {usr: CFG[usr]["password"].encode() for usr in CFG.sections() if not "cert" == usr.lower()}

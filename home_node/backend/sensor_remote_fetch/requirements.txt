@@ -1,2 +1,2 @@
 bcrypt
-redis
+requests

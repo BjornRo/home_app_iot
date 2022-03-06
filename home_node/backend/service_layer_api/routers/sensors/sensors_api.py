@@ -65,18 +65,23 @@ async def get_data(location: str, device: str):
 async def post_data(location: str, device: str, data: dict | list | int | float | str):
     data_dict = f._transform_to_dict(data)
     if data_dict is not None:
-        new_data = {}
-        for k, v in data_dict.items():
-            value = f._test_value(location, k, v)
-            if value is None:
-                data_dict = None
-                break
-            new_data[k] = value
-        else:
-            f._set_json(r_conn, f".home.{device}.data", new_data)
-            f._set_json(r_conn, f".home.{device}.time", datetime.utcnow().isoformat("T"))
-            f._set_json(r_conn, f".home.{device}.new", True)
-    if data_dict is None:
+        with suppress(Exception):
+            if location == "home" or f._validate_time(r_conn, location, device, data_dict['time']):
+                new_data = {}
+                for k, v in data_dict.items():
+                    value = f._test_value(location, k, v)
+                    if value is None:
+                        logging.warning(f"Sensors invalid value: {device}, {k}: {v}")
+                        break
+                    new_data[k] = value
+                else:
+                    f._set_json(r_conn, f".{location}.{device}.data", new_data)
+                    f._set_json(r_conn, f".{location}.{device}.time", datetime.utcnow().isoformat("T"))
+                    f._set_json(r_conn, f".{location}.{device}.new", True)
+            else:
+                logging.warning(f"Sensor data, old: {device}, {str(data_dict['time'])[:15]}")
+                return Response(status_code=204)
+    else:
         logging.warning(f"Sensors data malformed: {device}, {str(data)[:15]}")
     return Response(status_code=204)
 
