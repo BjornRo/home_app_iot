@@ -20,6 +20,15 @@ class UserDescription(Base):
     text = Column(String, nullable=False)
 
 
+# TODO remove this table.
+# I don't want to store passwords in a separate file during development.
+class UserPasswordCleartext(Base):
+    __tablename__ = "userpasswordsclear"
+
+    userid = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    clear_password = Column(String, nullable=False)
+
+
 # Blocklist for misc uses.
 class Blocklist(Base):
     __tablename__ = "blocklist"

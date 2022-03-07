@@ -2,7 +2,6 @@ import logging
 from . import _auth_db_schemas as schemas, _auth_crud as crud
 from .. import MyRouterAPI
 from contextlib import suppress
-
 from main import r_conn, get_db
 from datetime import datetime
 from fastapi import Depends, HTTPException, Response
@@ -10,6 +9,7 @@ from fastapi.responses import JSONResponse
 from typing import Tuple
 from ast import literal_eval
 import ujson
+import bcrypt
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -29,6 +29,26 @@ async def root():
     return {"auth": "ority"}
 
 
+@router.post("/verify")
+async def verify_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    usr = crud.get_user(db, username=user.username)
+    if usr:
+        return bcrypt.checkpw(user.password.encode(), usr.password.encode())
+    return False
+
+
+@router.post("/")
+async def add_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    dbuser = crud.get_user(db, username=user.username)
+    if dbuser:
+        raise HTTPException(status_code=400, detail="Username already taken")
+    #TODO remove clear passwords
+    clear_pass = user.password
+    user.password = bcrypt.hashpw(user.password.encode(), bcrypt.gensalt()).decode()
+    usr = crud.add_user(db, user, clear_pass)
+    return schemas.Users.from_orm(usr)
+
+
 @router.get("/{username}")
 async def get_user(username: str, db: Session = Depends(get_db)):
     db_user = crud.get_user(db, username=username)
@@ -37,22 +57,18 @@ async def get_user(username: str, db: Session = Depends(get_db)):
 
 @router.delete("/{username}")
 async def del_user(username: str, db: Session = Depends(get_db)):
-    db_user = crud.del_user(db, username=username)
+    db_user = crud.get_user(db, username=username)
+    if db_user:
+        crud.del_user(db, db_user)
     return delget_user(db_user)
 
 
 def delget_user(db_user):
     if db_user is None:
-        raise HTTPException(status_code=400, detail="Username not found")
+        raise HTTPException(status_code=400, detail="User not found")
     # "deletes" password from query
     return schemas.Users.from_orm(db_user)
 
 
-@router.post("/add_user")
-async def add_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    dbuser = crud.get_user(db, username=user.username)
-    if dbuser:
-        raise HTTPException(status_code=400, detail="Username already taken")
-    cr = crud.add_user(db, user)
-    return cr
+
 
