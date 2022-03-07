@@ -2,13 +2,14 @@ from datetime import datetime, timedelta
 from configparser import ConfigParser
 from threading import Thread
 from ast import literal_eval
-from zlib import decompress
 from bcrypt import checkpw
+from contextlib import suppress
 import requests
 import sqlite3
 import logging
 import socket
-import json
+import zlib
+import ujson
 import ssl
 import os
 
@@ -25,7 +26,8 @@ SERVICE_API = "http://service_layer_api:8000/sensors/"
 # Replace encoder to not use white space. Default to use isoformat for datetime =>
 #   Since I know the types I'm dumping. If needed custom encoder or an "actual" default function.
 json._default_encoder = json.JSONEncoder(  # type: ignore
-    separators=(",", ":"), default=lambda dt: dt.isoformat())
+    separators=(",", ":"), default=lambda dt: dt.isoformat()
+)
 
 # Config reader -- Path(__file__).parent.absolute() /
 CFG = ConfigParser()
@@ -82,7 +84,9 @@ def socket_handler(device_cred: dict) -> None:
                     # if timeout, client is not connected.
                     client, (c_ip, c_port) = sslsrv.accept()
                     if _is_client_allowed(c_ip, c_port):
-                        Thread(target=client_handler, args=(device_cred, client), daemon=True).start()
+                        Thread(
+                            target=client_handler, args=(device_cred, client), daemon=True
+                        ).start()
                 except Exception as e:  # Don't care about faulty clients with no SSL wrapper.
                     logging.info("Client tried to connect without SSL context: " + str(e))
 
@@ -97,26 +101,22 @@ def client_handler(device_cred: dict[str, bytes], client: ssl.SSLSocket) -> None
         client.send(b"OK")
 
         while 1:
-            payload_len = int.from_bytes(_recvall(client, 3, 3), 'big')
+            payload_len = int.from_bytes(_recvall(client, 3, 3), "big")
             if not (0 < payload_len <= MAX_PAYLOAD_SOCKET):
                 break
             recvdata = _recvall(client, payload_len, MAX_PAYLOAD_SOCKET)
             if not recvdata:
                 break
-            try:
-                recvdata = decompress(recvdata)
-            except:  # Test if data is compressed, else it is not -> ignore.
-                pass
-            if not _send_to_service_layer(location_name, recvdata.decode()):
+            with suppress(zlib.error):
+                recvdata = zlib.decompress(recvdata)
+            if not _send_to_service_layer(location_name, recvdata):
                 break
     except socket.timeout as e:
         logging.info("Socket timeout: " + str(e))
     except Exception as e:  # Just to log if any other important exceptions are raised
         logging.warning("Exception from client handler: " + str(e))
-    try:
+    with suppress(Exception):
         client.close()
-    except:
-        pass
 
 
 def _is_client_allowed(ip_addr: str, port: str) -> bool:
@@ -125,7 +125,7 @@ def _is_client_allowed(ip_addr: str, port: str) -> bool:
     cursor.execute("SELECT * FROM blocklist WHERE ip = ?", (ip_addr,))
     user = cursor.fetchone()
     if user is not None:
-        if user[5] >= datetime.now().isoformat("T"):
+        if user[5] >= datetime.utcnow().isoformat("T"):
             cursor.close()
             conn.close()
             _block_user(ip_addr)
@@ -142,7 +142,7 @@ def _is_client_allowed(ip_addr: str, port: str) -> bool:
 
 
 def _block_user(ip: str) -> None:
-    curr_time = datetime.now()
+    curr_time = datetime.utcnow()
 
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -155,7 +155,7 @@ def _block_user(ip: str) -> None:
             1,
             curr_time.isoformat("T"),
             (curr_time + timedelta(minutes=BAN_TIME)).isoformat("T"),
-            "Initial ban"  # Comments are not really useful, we are checking banned_until anyways.
+            "Initial ban",  # Comments are not really useful, we are checking banned_until anyways.
         )
     else:  # {cursor.description[i][0]: user[i] for i in range(len(user))}, if for a future dict-usage.
         usr_data = list(user)
@@ -163,11 +163,13 @@ def _block_user(ip: str) -> None:
         usr_data[2] += 1  # Total attemps
         if usr_data[1] >= ATTEMPT_PENALTY:
             multiplier = 5
-        elif usr_data[1] >= ATTEMPT_PENALTY/2:
+        elif usr_data[1] >= ATTEMPT_PENALTY / 2:
             multiplier = 2
         else:
             multiplier = 1
-        usr_data[4] = (curr_time + timedelta(minutes=BAN_TIME * usr_data[1] * multiplier)).isoformat("T")
+        usr_data[4] = (
+            curr_time + timedelta(minutes=BAN_TIME * usr_data[1] * multiplier)
+        ).isoformat("T")
     cursor.execute("INSERT OR REPLACE INTO blocklist VALUES (?,?,?,?,?,?)", usr_data)
     conn.commit()
     cursor.close()
@@ -178,7 +180,7 @@ def _validate_user(client: ssl.SSLSocket, device_cred: dict[str, bytes], data: b
     # dataform: b"login\npassw", data may be None
     # Test if data is somewhat valid. Exactly one \n or else unpack error, which is clearly invalid.
     try:
-        location_name, passwd = data.split(b'\n')
+        location_name, passwd = data.split(b"\n")
         location_name = location_name.decode().lower()
         hash_passwd = device_cred.get(location_name)
         if hash_passwd is None or not location_name:
@@ -186,7 +188,7 @@ def _validate_user(client: ssl.SSLSocket, device_cred: dict[str, bytes], data: b
     except:
         # If any data is bad, such as non-existing user or malformed payload, then use a default invalid user.
         location_name = None
-        hash_passwd = b'$2b$12$jjWy0CnsCN9Y9Ij4s7eNyeEnmmlJgmJlHANykZnDOA2A3iHYZGZGC'
+        hash_passwd = b"$2b$12$jjWy0CnsCN9Y9Ij4s7eNyeEnmmlJgmJlHANykZnDOA2A3iHYZGZGC"
         passwd = b"hash_is_totally_not_password"
     try:
         if checkpw(passwd, hash_passwd):
@@ -200,29 +202,33 @@ def _validate_user(client: ssl.SSLSocket, device_cred: dict[str, bytes], data: b
     return None
 
 
-def _send_to_service_layer(location_name: str, payload: str) -> bool:
-    #{'pizw': ("2014-12-12T12:44:44.123", {'Temperature': 44.2}), 'hydrofor': (None, {'Temperature': -99, 'Humidity': -99, 'Airpressure': -99})}
+# b'{"pizw": ["2022-03-06T22:33:53.631231", {"temperature": -99}],
+# "hydrofor": ["2022-03-06T22:33:53.631231", {"temperature": -99, "humidity": -99, "airpressure": -99}]}'
+def _send_to_service_layer(location_name: str, payload: bytes) -> bool:
+    # Payload should already be dumped json-data in bytes form. json.loads loads bytes.
     if requests.post(SERVICE_API + location_name, data=payload).status_code >= 400:
-        logging.warning("Bad data sent from: " + location_name + ", " + payload[:20])
+        logging.warning("Bad data sent from: " + location_name + ", " + payload.decode()[:20])
         return False
     else:
         return True
 
 
-def _recvall(client:  ssl.SSLSocket, size: int, buf_size=4096) -> bytes:
+def _recvall(client: ssl.SSLSocket, size: int, buf_size=4096) -> bytes:
     received_chunks = []
     remaining = size
     while remaining > 0:
         received = client.recv(min(remaining, buf_size))
         if not received:
-            return b''
+            return b""
         received_chunks.append(received)
         remaining -= len(received)
-    return b''.join(received_chunks)
+    return b"".join(received_chunks)
 
 
 def get_default_credentials() -> dict[str, bytes]:
-    return {usr: CFG[usr]["password"].encode() for usr in CFG.sections() if not "cert" == usr.lower()}
+    return {
+        usr: CFG[usr]["password"].encode() for usr in CFG.sections() if not "cert" == usr.lower()
+    }
 
 
 def check_or_create_db() -> None:
@@ -245,15 +251,21 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '-d', '--debug',
+        "-d",
+        "--debug",
         help="Print lots of debugging statements",
-        action="store_const", dest="loglevel", const=logging.DEBUG,
+        action="store_const",
+        dest="loglevel",
+        const=logging.DEBUG,
         default=logging.WARNING,
     )
     parser.add_argument(
-        '-v', '--verbose',
+        "-v",
+        "--verbose",
         help="Be verbose",
-        action="store_const", dest="loglevel", const=logging.INFO,
+        action="store_const",
+        dest="loglevel",
+        const=logging.INFO,
     )
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel)
