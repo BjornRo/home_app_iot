@@ -202,8 +202,8 @@ def _validate_user(client: ssl.SSLSocket, device_cred: dict[str, bytes], data: b
     return None
 
 
-# b'{"pizw": ["2022-03-06T22:33:53.631231", {"temperature": -99}],
-# "hydrofor": ["2022-03-06T22:33:53.631231", {"temperature": -99, "humidity": -99, "airpressure": -99}]}'
+# {"pizw": ["2022-03-06T22:33:53.631231", {"temperature": -99}], "hydrofor": ["2022-03-06T22:33:53.631231", {"temperature": -99, "humidity": -99, "airpressure": -99}]}
+# {"pizw": {"time":"2022-03-06T22:33:53.631231", "data":{"temperature": -99}}, "hydrofor": {"time":"2022-03-06T22:33:53.631231", "data":{"temperature": -99, "humidity": -99, "airpressure": -99}}}
 def _send_to_service_layer(location_name: str, payload: bytes) -> bool:
     # Payload should already be dumped json-data in bytes form. json.loads loads bytes.
     if requests.post(SERVICE_API + location_name, data=payload).status_code >= 400:

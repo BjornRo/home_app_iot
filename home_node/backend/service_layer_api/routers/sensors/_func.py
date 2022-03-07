@@ -53,12 +53,11 @@ def _validate_time(r_conn: REJSON_Client, location: str, device: str, new_time: 
         with suppress(ValueError):
             # Test if timeformat is valid
             try:
-                # Test if data exists. If not, set a placeholder as time.
+                # Test if timedata exist, if not, then the time is "valid"
                 old_time = datetime.fromisoformat(r_conn.get("sensors", path))
                 if old_time < new_time:
                     return True
             except redis.exceptions.ResponseError:
-                _set_json(r_conn, path, datetime.min.isoformat("T"))
                 return True
     return False
 

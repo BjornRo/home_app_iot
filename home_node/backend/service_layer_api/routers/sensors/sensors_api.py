@@ -42,45 +42,17 @@ async def get_sensor_data():
     raise HTTPException(status_code=404)
 
 
-@router.post("/dd")
-async def psd(data: RawLocationData):
-    logging.warning(data)
-    return isinstance(data["pizw"], RawDeviceData)
+@router.get("/clear_redis")
+async def psd():
+    r_conn.set("sensors", ".", {})
 
 
 @router.post("/{location}")
 async def post_location_data(location: str, data: RawLocationData):
-    data_string = (await request.body()).decode()
-    try:
-        payload = json.loads(data_string)
-    except:
-        try:
-            payload = literal_eval(data_string)
-        except:
-            return None
-    if isinstance(payload, list) and len(payload) == 2:
-        payload = {payload[0]: payload[1]}
-
-    if not isinstance(payload, dict):
-        return JSONResponse(
-            status_code=400, content={"message": "Invalid data sent, should be json"}
-        )
-
     resp = Response(status_code=400)
-    for device, list_or_dict in payload.items():
-        if not isinstance(device, str):
-            continue
-
-        if isinstance(list_or_dict, list) and len(list_or_dict) == 2:
-            datadict = RawDeviceData(time=list_or_dict[0], data=list_or_dict[1])
-        elif isinstance(list_or_dict, dict):
-            datadict = RawDeviceData(**{k.lower(): v for k, v in list_or_dict.items()})
-        else:
-            return JSONResponse(
-                status_code=400, content={"message": "Invalid device data sent, should be json"}
-            )
-
-        result = await post_data(location, device, datadict)
+    for device, list_or_dict in data.__root__.items():
+        result = await post_data(location, device, list_or_dict)
+        # Allow atleast one device to update its data.
         if result.status_code == 204:
             resp = result
     return resp

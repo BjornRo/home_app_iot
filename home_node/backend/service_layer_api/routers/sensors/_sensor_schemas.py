@@ -4,7 +4,7 @@ from pydantic import BaseModel, root_validator
 from typing import Tuple
 
 
-# ({"pizw": {"time": "2022-03-06T22:33:53.631231", "data": {"temperature": -99}}})
+# {"pizw": {"time": "2022-03-06T22:33:53.631231", "data": {"temperature": -99}},}
 # ({"pizw": ["2022-03-06T22:33:53.631231", {"temperature": -99}]})
 
 
