@@ -32,7 +32,7 @@ async def add_blocklist_ip(obj: schemas.BlocklistCreate, db: Session = Depends(g
     return cr
 
 
-# Update ban, sets datetime to the sent one and attempts to 0
+# Update ban, sets datetime, attempts to the sent ones
 @router.put("/")
 async def update_blocklist_ip(obj: schemas.BlocklistUpdate, db: Session = Depends(get_db)):
     dbuser = crud.get_blocklist_item(db, ip=obj.ip)
@@ -79,12 +79,14 @@ def ip_path_blocklist_item(db_user):
     return schemas.Blocklist.from_orm(db_user)
 
 
-# Check if ip address is banned. If banned, current attemps returned, else none.
+# Check if ip address is banned.
 @router.get("/isbanned/{ip}")
 async def ip_is_banned(ip: str, db: Session = Depends(get_db)):
     db_user = crud.get_blocklist_item(db, ip)
     if db_user:
-        return datetime.utcnow() <= db_user.ban_expire
+        if datetime.utcnow() <= db_user.ban_expire:
+            return True
+        crud.reset_attempts(db, db_user)
     return False
 
 

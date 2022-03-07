@@ -35,7 +35,7 @@ def update_blocklist_item(db: Session, obj: dbschemas.BlocklistUpdate):
     if item is None:
         return None
     item.total_attempts += 1  # type:ignore
-    item.attempt_counter = 0  # type:ignore
+    item.attempt_counter = obj.attempt_counter  # type:ignore
     item.ban_expire = obj.ban_expire  # type:ignore
     db.commit()
     db.refresh(item)
@@ -59,6 +59,12 @@ def increment_attempts_blocklist_item(db: Session, ip: str):
         return None
     item.total_attempts += 1  # type:ignore
     item.attempt_counter += 1  # type:ignore
+    db.commit()
+    db.refresh(item)
+    return item
+
+def reset_attempts(db: Session, item: models.Blocklist):
+    item.attempt_counter = 0  # type:ignore
     db.commit()
     db.refresh(item)
     return item

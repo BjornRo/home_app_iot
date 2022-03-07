@@ -14,12 +14,12 @@ class BlocklistCreate(BlocklistBase):
 
 class BlocklistUpdate(BlocklistBase):
     ban_expire: datetime
+    attempt_counter: int
 
 
 class Blocklist(BlocklistUpdate):
     id: int
     total_attempts: int
-    attempt_counter: int
     manual_ban: bool
 
     class Config:
