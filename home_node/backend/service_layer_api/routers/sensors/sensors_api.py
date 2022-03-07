@@ -1,6 +1,6 @@
 import logging
-from . import _dbschemas, _func as f
-from ._sensor_schemas import *
+from . import _sensors_db_schemas as dbschemas, _func as f
+from ._sensors_schemas import *
 from .. import MyRouterAPI
 from contextlib import suppress
 from main import r_conn, get_db
@@ -11,7 +11,7 @@ from typing import Tuple
 from ast import literal_eval
 import ujson
 from sqlalchemy.orm import Session
-from . import _crud
+from . import _sensors_crud as crud
 import redis
 
 # Settings
@@ -124,24 +124,24 @@ async def get_relay_status():
 @router.post("/db")
 async def insert_db(data: LocationSensorData, db: Session = Depends(get_db)):
     curr_time = datetime.utcnow()
-    _crud.add_timestamp(db, _dbschemas.TimeStamp(time=curr_time))
+    crud.add_timestamp(db, dbschemas.TimeStamp(time=curr_time))
     for location in data.__root__:
-        if _crud.get_location(db, name=location) is None:
-            _crud.add_location(db, name=location)
+        if crud.get_location(db, name=location) is None:
+            crud.add_location(db, name=location)
         for device in data.__root__[location].__root__:
-            if _crud.get_device(db, name=device) is None:
-                _crud.add_device(db, name=device)
+            if crud.get_device(db, name=device) is None:
+                crud.add_device(db, name=device)
             if data.__root__[location].__root__[device].new:
                 for key, value in data.__root__[location].__root__[device].data.__root__.items():
-                    if _crud.get_mtype(db, name=key) is None:
-                        _crud.add_mtype(db, name=key)
-                    _crud.add_measurement(
+                    if crud.get_mtype(db, name=key) is None:
+                        crud.add_mtype(db, name=key)
+                    crud.add_measurement(
                         db,
-                        _dbschemas.Measurements(
+                        dbschemas.Measurements(
                             name=location,
-                            device=_dbschemas.Device(name=device),
-                            mtype=_dbschemas.MeasureType(name=key),
-                            time=_dbschemas.TimeStamp(time=curr_time),
+                            device=dbschemas.Device(name=device),
+                            mtype=dbschemas.MeasureType(name=key),
+                            time=dbschemas.TimeStamp(time=curr_time),
                             value=value,
                         ),
                     )

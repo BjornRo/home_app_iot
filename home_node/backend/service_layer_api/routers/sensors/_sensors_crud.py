@@ -1,15 +1,15 @@
 from sqlalchemy.orm import Session
 
-from . import _dbschemas
+from . import _sensors_db_schemas as dbschemas
 from main import db_models as models
 
-def add_timestamp(db: Session, timestamp: _dbschemas.TimeStamp):
+
+def add_timestamp(db: Session, timestamp: dbschemas.TimeStamp):
     time = models.TimeStamps(time=timestamp.time)
     db.add(time)
     db.commit()
     db.refresh(time)
     return time
-
 
 
 def get_location(db: Session, name: str):
@@ -48,7 +48,7 @@ def add_mtype(db: Session, name: str):
     return measure_type
 
 
-def add_measurement(db: Session, measurement: _dbschemas.Measurements):
+def add_measurement(db: Session, measurement: dbschemas.Measurements):
     measurment_data = models.Measurements(
         location=measurement.name,
         device=measurement.device.name,

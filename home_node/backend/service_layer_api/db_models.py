@@ -1,10 +1,39 @@
-from unicodedata import name
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Float, DateTime
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Float, DateTime, Sequence
 from sqlalchemy.orm import relationship
 
 from db import Base
 
+# Users
+class Users(Base):
+    __tablename__ = "users"
 
+    id = Column(Integer, Sequence("user_id_seq"), primary_key=True)
+    username = Column(String, nullable=False, unique=True)
+    password = Column(String, nullable=False)
+    date_added = Column(DateTime, nullable=False)
+
+
+class UserDescription(Base):
+    __tablename__ = "userdescription"
+
+    userid = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    text = Column(String, nullable=False)
+
+
+# Blocklist for misc uses.
+class Blocklist(Base):
+    __tablename__ = "blocklist"
+
+    id = Column(Integer, Sequence("blocklist_id_seq"), primary_key=True)
+    ip = Column(String, nullable=False, unique=True)
+    ban_first = Column(DateTime, nullable=False)
+    ban_expire = Column(DateTime, nullable=False)
+    total_attempts = Column(Integer, nullable=False)
+    attempt_counter = Column(Integer, nullable=False)
+    manual_ban = Column(Boolean, nullable=False)
+
+
+# Sensors tables
 class Locations(Base):
     __tablename__ = "locations"
 

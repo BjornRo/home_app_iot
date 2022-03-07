@@ -1,5 +1,5 @@
 import redis
-from ._sensor_schemas import *
+from ._sensors_schemas import *
 from ast import literal_eval
 from datetime import datetime
 from redis.commands.json import JSON as REJSON_Client
