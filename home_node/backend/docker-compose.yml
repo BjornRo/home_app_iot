@@ -14,9 +14,10 @@ x-redis-db-sensor-env: &redis-db-env
     - DBSENSOR=0
     - DBUSRCACHE=1
 
-# x-cert-volume: &cert-volumes
-#   - ./appdata/certbot/letsencrypt:/etc/letsencrypt
-#   - ./appdata/certbot/www:/var/www/certbot
+x-cert-volume: &cert-volumes
+  volumes:
+    - ./appdata/certbot/letsencrypt:/etc/letsencrypt
+    - ./appdata/certbot/www:/var/www/certbot
 
 services:
   # mqtt:
@@ -45,23 +46,40 @@ services:
   #     - ./sensor_logger_db:/app
   #     - ./appdata/db:/db
   #   restart: always
+  #   depends_on:
+  #     - service_layer_api
   #   build:
   #     context: ./sensor_logger_db
   #     dockerfile: sensor_logger_db.dockerfile
   #   command: python3 main.py --verbose
 
-  sensor_mqtt_listener:
-    container_name: sensor_mqtt_listener
+  # sensor_mqtt_listener:
+  #   container_name: sensor_mqtt_listener
+  #   <<: *redis-db-env
+  #   <<: *tz-volumes
+  #   volumes:
+  #     - ./sensor_mqtt_listener:/app
+  #   restart: always
+  #   build:
+  #     context: ./sensor_mqtt_listener
+  #     dockerfile: sensor_mqtt_listener.dockerfile
+  #   depends_on:
+  #     - service_layer_api
+  #   command: python3 main.py --verbose
+
+  sensor_remote_fetch:
+    container_name: sensor_remote_fetch
     <<: *redis-db-env
     <<: *tz-volumes
+    <<: *cert-volumes
     volumes:
-      - ./sensor_mqtt_listener:/app
+      - ./appdata/certbot/letsencrypt:/etc/letsencrypt
+      - ./sensor_remote_fetch:/app
     restart: always
     build:
-      context: ./sensor_mqtt_listener
-      dockerfile: sensor_mqtt_listener.dockerfile
+      context: ./sensor_remote_fetch
+      dockerfile: sensor_remote_fetch.dockerfile
     depends_on:
-      - rejson
       - service_layer_api
     command: python3 main.py --verbose
 
@@ -81,21 +99,6 @@ services:
       - 9090:8000
     depends_on:
       - rejson
-
-  # sensor_remote_fetch:
-  #   container_name: sensor_remote_fetch
-  #   <<: *redis-db-env
-  #   <<: *tz-volumes
-  #     - ./appdata/db:/db
-  #     - ./appdata/certbot/letsencrypt:/sslcerts
-  #   restart: always
-  #   build:
-  #     context: ./sensor_remote_fetch
-  #     dockerfile: sensor_remote_fetch.dockerfile
-  #   depends_on:
-  #     - rejson
-  #   #  - mqtt
-  #   command: python3 main.py --verbose
 
   # public_api:
   #   container_name: public_api

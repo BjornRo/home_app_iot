@@ -1,30 +1,24 @@
 from datetime import datetime, timedelta
 from configparser import ConfigParser
 from threading import Thread
-from ast import literal_eval
 from contextlib import suppress
-from aiohttp import request
 import requests
-import sqlite3
 import logging
 import socket
 import zlib
-import ujson
 import ssl
-import os
 
 
 SERVICE_API = "http://service_layer_api:8000/"
 BLOCK_LIST_API = SERVICE_API + "blocklist/"
 
-
 CFG = ConfigParser()
 CFG.read("config.ini")
-
 
 # SSL Context
 HOSTNAME = CFG["DEFAULT"]["url"]
 SSLPATH = f"/etc/letsencrypt/live/{HOSTNAME}/"
+
 SSLPATH_TUPLE = (SSLPATH + "fullchain.pem", SSLPATH + "privkey.pem")
 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 context.load_cert_chain(*SSLPATH_TUPLE)
@@ -48,6 +42,7 @@ def main() -> None:
             socket.setdefaulttimeout(3)  # For ssl handshake and auth.
             srv.bind(("", S_PORT))
             srv.listen(8)
+            logging.info("Socket server listening on: '{}':{}".format(*srv.getsockname()[:2]))
             with context.wrap_socket(srv, server_side=True) as sslsrv:
                 while 1:
                     try:
