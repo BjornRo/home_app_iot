@@ -1,10 +1,5 @@
 fastapi
 uvicorn
-#pydantic
 bcrypt
 redis
-#databases
-python-multipart
-databases[sqlite]
-python-jose[cryptography]
 ujson

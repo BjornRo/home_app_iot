@@ -1,21 +1,23 @@
 import logging
+import os
 import requests
 import ujson
 from datetime import datetime
 from paho.mqtt.client import Client as MQTTClient
 from time import sleep
 
+# Addresses
+MQTT_HOST = "home.1d"
+LOCATION = "home/"
+SERVICE_API = os.environ["SERVICE_API"] + "/sensors" + LOCATION
 
+# MQTT subscription
 RELAY_STATUS_PATH = "balcony/relay/status"
 SUB_TOPICS = ["bikeroom/temp", "balcony/temphumid", "kitchen/temphumidpress"]
 
 # Raw measured values are multiplied by 100 and converted to int.
 MUL_INT_LIST = ["bikeroom/temp", "balcony/temphumid", "kitchen/temphumidpress"]
 
-# Misc
-MQTT_HOST = "home.1d"
-LOCATION = "home/"
-SERVICE_API = "http://service_layer_api:8000/sensors/" + LOCATION
 
 
 def main():

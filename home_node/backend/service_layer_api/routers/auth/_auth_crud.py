@@ -1,10 +1,9 @@
-from datetime import datetime
-from sqlalchemy.orm import Session
-from sqlalchemy import func
-import logging
-
 from . import _auth_db_schemas as dbschemas
+from datetime import datetime
 from main import db_models as models
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
 
 # User related stuff
 def get_user(db: Session, user_id: int | None = None, username: str | None = None):
@@ -42,9 +41,12 @@ def del_user(db: Session, user: models.Users):
         db.delete(desc)
 
     # TODO Remove
-    clear_pw = db.query(models.UserPasswordCleartext).filter(models.UserPasswordCleartext.userid == uid).first()
+    clear_pw = (
+        db.query(models.UserPasswordCleartext)
+        .filter(models.UserPasswordCleartext.userid == uid)
+        .first()
+    )
     if clear_pw:
         db.delete(clear_pw)
     db.commit()
     return user
-

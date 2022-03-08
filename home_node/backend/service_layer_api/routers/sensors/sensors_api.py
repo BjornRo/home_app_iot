@@ -1,22 +1,20 @@
 import logging
-from . import _sensors_db_schemas as dbschemas, _func as f
+import redis
+from . import _sensors_db_schemas as dbschemas, _sensors_crud as crud, _func as f
 from ._sensors_schemas import *
 from .. import MyRouterAPI
 from contextlib import suppress
-from main import r_conn, get_db
 from datetime import datetime
 from fastapi import Depends, HTTPException, Response
 from fastapi.responses import JSONResponse
-from typing import Tuple
-from ast import literal_eval
-import ujson
+from main import r_conn, get_db
 from sqlalchemy.orm import Session
-from . import _sensors_crud as crud
-import redis
+from typing import Tuple
 
 # Settings
 PREFIX = "/sensors"
 TAGS = ["sensors_api"]
+
 
 # To route the routings down the document.
 router = MyRouterAPI(prefix=PREFIX, tags=TAGS).router
@@ -128,7 +126,7 @@ async def insert_db(data: LocationSensorData, db: Session = Depends(get_db)):
     for location in data.__root__:
         if crud.get_location(db, name=location) is None:
             crud.add_location(db, name=location)
-        for device in data.__root__[location].__root__: #TODO Add deviceMeasures somewhere...
+        for device in data.__root__[location].__root__:  # TODO Add deviceMeasures somewhere...
             if crud.get_device(db, name=device) is None:
                 crud.add_device(db, name=device)
             if data.__root__[location].__root__[device].new:

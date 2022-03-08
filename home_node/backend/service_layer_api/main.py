@@ -1,33 +1,31 @@
-from fastapi.middleware.cors import CORSMiddleware
-from redis.commands.json import JSON as REJSON_Client
-from importlib import import_module
-from routers import MyRouterAPI
-from databases import Database
-from secrets import token_hex
-from datetime import datetime
-from fastapi import FastAPI
-from os.path import isfile
-import json
-from glob import glob
+import os
 import redis
 import pathlib
-import os
-from os.path import basename, isfile
-import sys
+import ujson
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from importlib import import_module
+from redis.commands.json import JSON as REJSON_Client
+from routers import MyRouterAPI
 
-import db_models
-from db import SessionLocal, engine
+import db.db_models as db_models
+from db.db import SessionLocal, engine
 
-db_models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
 
-REJSON_HOST = "rejson"
 # Redis json to be able to communicate between the daemon and backend.
+REJSON_HOST = "rejson"
+# TODO Change to async redis client
 r_conn: REJSON_Client = redis.Redis(
     host=REJSON_HOST, port=6379, db=int(os.getenv("DBSENSOR", "0"))
 ).json()
+
+
+# Db
+db_models.Base.metadata.create_all(bind=engine)
+
 
 def get_db():
     db = SessionLocal()
@@ -39,15 +37,17 @@ def get_db():
 
 origins = [  # Internal routing using dnsmasq on my router.
     "http://localhost",
-    "http://192.168.1.173",
     "http://home.1d",
+    "http://192.168.1.173",
+    "http://192.168.1.199",
+    "http://192.168.1.200",
     "http://www.home",
 ]
 
 # Load additonal public urls, hiding it at the moment to reduce risk of DoS attack on my own network.
 url: str
 with open("hidden_urls.json", "r") as f:
-    for url in json.load(f)["urls"]:
+    for url in ujson.load(f)["urls"]:
         origins.append("http://" + url)
         origins.append("https://" + url)
 

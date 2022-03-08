@@ -1,23 +1,20 @@
-from datetime import datetime, timedelta
-from configparser import ConfigParser
-from threading import Thread
-from contextlib import suppress
-import requests
 import logging
+import os
+import requests
 import socket
-import json
-import zlib
 import ssl
+import zlib
+from contextlib import suppress
+from datetime import datetime, timedelta
+from threading import Thread
 
 
-SERVICE_API = "http://service_layer_api:8000/"
+SERVICE_API = os.environ["SERVICE_API"] + "/"
 BLOCK_LIST_API = SERVICE_API + "blocklist/"
 
-CFG = ConfigParser()
-CFG.read("config.ini")
 
 # SSL Context
-HOSTNAME = CFG["DEFAULT"]["url"]
+HOSTNAME = os.environ['HOSTNAME']
 SSLPATH = f"/etc/letsencrypt/live/{HOSTNAME}/"
 
 SSLPATH_TUPLE = (SSLPATH + "fullchain.pem", SSLPATH + "privkey.pem")
@@ -36,8 +33,10 @@ ATTEMPT_PENALTY = 5
 MQTT_HOST = "home.1d"
 REJSON_HOST = "rejson"
 
+# TODO instead of blocking ip in app-layer, maybe add ip firewall.
 
-def main() -> None:
+
+def main():
     with requests.Session() as session:
         srv = socket.create_server(("", S_PORT), family=socket.AF_INET6, dualstack_ipv6=True)
         socket.setdefaulttimeout(4)  # For ssl handshake and auth.
@@ -54,7 +53,7 @@ def main() -> None:
                             target=client_handler, args=(session, client, ip_addr), daemon=True
                         ).start()
                     else:
-                        # TODO, uncomment_block_user(session, ip_addr)
+                        _block_user(session, ip_addr)
                         logging.warning("Client is banned: " + ip_addr)
                         with suppress(Exception):
                             client.close()
@@ -71,7 +70,8 @@ def client_handler(session: requests.Session, client: ssl.SSLSocket, ip: str) ->
 
         if not valid:
             logging.warning(f"Client failed login, [usr: {location_name}, pw: {passwd}]")
-            return  # TODO, uncomment _block_user(session, ip)
+            _block_user(session, ip)
+            return
 
         client.settimeout(60)
         client.send(b"OK")
@@ -85,7 +85,7 @@ def client_handler(session: requests.Session, client: ssl.SSLSocket, ip: str) ->
             with suppress(zlib.error):
                 recvdata = zlib.decompress(recvdata)
             if not _send_to_service_layer(session, location_name, recvdata):
-                logging.warning(f"Bad data sent from: {location_name}, {recvdata.decode()[:20]}")
+                logging.warning(f"Bad data sent from: {location_name}, {recvdata.decode()[:30]}")
                 break
     except socket.timeout as e:
         logging.info(f"Socket timeout, ip: {ip}, {e}")
@@ -115,7 +115,7 @@ def _block_user(session: requests.Session, ip_addr: str) -> None:
     curr_time = datetime.utcnow()
 
     resp = session.get(BLOCK_LIST_API + ip_addr)
-    # If 400, then user hasn't been previously banned.
+    # If 400, then user hasn't been previously banned. Add new entry.
     if resp.status_code >= 400:
         session.post(
             BLOCK_LIST_API,
@@ -125,7 +125,7 @@ def _block_user(session: requests.Session, ip_addr: str) -> None:
                 "manual_ban": False,
             },
         )
-    else:
+    elif resp.status_code == 200:
         # Increases by 1
         attempts: int = session.patch(BLOCK_LIST_API + ip_addr).json()
 

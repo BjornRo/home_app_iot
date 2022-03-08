@@ -1,12 +1,13 @@
-from time import sleep
 import logging
-import schedule
+import os
 import requests
+import schedule
+from time import sleep
 
 # Task every:
 TASK_TIMES = (":30", ":00")
 
-SERVICE_API = "http://service_layer_api:8000/sensors"
+SERVICE_API = os.environ["SERVICE_API"] + "/sensors"
 
 
 def main():

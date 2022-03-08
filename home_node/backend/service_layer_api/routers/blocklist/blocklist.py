@@ -1,14 +1,9 @@
-import logging
-import ujson
 from . import _blocklist_schemas as schemas, _blocklist_crud as crud
 from .. import MyRouterAPI
-from contextlib import suppress
 from datetime import datetime
-from fastapi import Depends, HTTPException, Response
-from fastapi.responses import JSONResponse
-from main import r_conn, get_db
+from fastapi import Depends, HTTPException
+from main import get_db
 from sqlalchemy.orm import Session
-
 
 # Settings
 PREFIX = "/blocklist"
@@ -21,6 +16,7 @@ router = MyRouterAPI(prefix=PREFIX, tags=TAGS).router
 @router.get("/")
 async def root():
     return {"block": "list"}
+
 
 # Add ban
 @router.post("/")
@@ -88,5 +84,3 @@ async def ip_is_banned(ip: str, db: Session = Depends(get_db)):
             return True
         crud.reset_attempts(db, db_user)
     return False
-
-

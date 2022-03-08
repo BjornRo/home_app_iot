@@ -1,21 +1,25 @@
-from configparser import ConfigParser
-from pathlib import Path
-from time import sleep
-import netifaces
 import argparse
-import requests
 import logging
+import netifaces
+import os
+import requests
+from time import sleep
 
 # IPV6 only. So progressive!
 # This script can run as a cronjob on host-machine but upload and go is worth the potential performance loss.
 
-parser = argparse.ArgumentParser(description='Settings for time delay')
+parser = argparse.ArgumentParser(description="Settings for time delay")
 parser.add_argument("device", type=str, help="Device to track, eth0, wlan0 etc...")
 parser.add_argument("time", help="Default seconds")
-parser.add_argument("--hrs", dest="hour", action="store_true", help="Select hour between", default=False)
-parser.add_argument("--min", dest="minutes", action="store_true", help="Select min between", default=False)
+parser.add_argument(
+    "--hrs", dest="hour", action="store_true", help="Select hour between", default=False
+)
+parser.add_argument(
+    "--min", dest="minutes", action="store_true", help="Select min between", default=False
+)
 
 args = parser.parse_args()
+
 
 SLEEP_TIME = 7200
 CONTACT_TIMEOUT = 10  # Seconds
@@ -32,10 +36,11 @@ if args.time:
         if 60 > SLEEP_TIME:
             SLEEP_TIME = 7200
 
+
 def main():
-    cfg = ConfigParser()
-    cfg.read(Path(__file__).parent.absolute() / "config.ini")
-    url = cfg["DDNS"]["addr"].format(cfg["DDNS"]["domain"], cfg["DDNS"]["token"])
+    subaddr = os.environ['HOSTNAME'].split(".")[0]
+    token = os.environ['DDNS_TOKEN']
+    url = os.environ['DDNS_ADDR'].format(subaddr, token)
     while 1:
         try:
             for i in netifaces.ifaddresses(args.device)[netifaces.AF_INET6]:

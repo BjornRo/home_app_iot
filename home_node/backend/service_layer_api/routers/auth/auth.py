@@ -1,20 +1,9 @@
-import logging
+import bcrypt
 from . import _auth_db_schemas as schemas, _auth_crud as crud
 from .. import MyRouterAPI
-from contextlib import suppress
-from main import r_conn, get_db
-from datetime import datetime
-from fastapi import Depends, HTTPException, Response
-from fastapi.responses import JSONResponse
-from typing import Tuple
-from ast import literal_eval
-import ujson
-import bcrypt
+from fastapi import Depends, HTTPException
+from main import get_db
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-
-# from . import _crud
-import redis
 
 # Settings
 PREFIX = "/auth"

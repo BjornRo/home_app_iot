@@ -1,4 +1,5 @@
 from . import MyRouterAPI
+from main import r_conn
 from starlette.responses import FileResponse
 
 # Settings
@@ -16,17 +17,22 @@ async def root():
     return {"hello": "world"}
 
 
-@router.get('/favicon.ico', include_in_schema=False)
+@router.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     return FileResponse("static/favicon.ico")
 
 
-@router.get('/balc_status', include_in_schema=False)
+@router.get("/clear_redis", include_in_schema=False)
+async def clear_redis():
+    return r_conn.set("sensors", ".", {})
+
+
+@router.get("/balc_status", include_in_schema=False)
 async def balc_status():
     return {"status": [0, 0, 1, 0]}
 
 
-@router.get('/sensor_resp', include_in_schema=False)
+@router.get("/sensor_resp", include_in_schema=False)
 async def sensor_resp():
     return {
         "home": {
@@ -36,23 +42,19 @@ async def sensor_resp():
                 "data": {
                     "temperature": 42.1,
                     "humidity": 33.4,
-                }
+                },
             },
             "bikeroom": {
                 "time": "2021-12-31T00:13:37.12345",
                 "new": True,
                 "data": {
                     "temperature": -42.4,
-                }
+                },
             },
             "kitchen": {
                 "time": "2021-12-31T11:13:37.12345",
                 "new": True,
-                "data": {
-                    "temperature": -42.3,
-                    "humidity": 99.9,
-                    "airpressure": 1024.64
-                }
+                "data": {"temperature": -42.3, "humidity": 99.9, "airpressure": 1024.64},
             },
         },
         "remote_sh": {
@@ -61,16 +63,12 @@ async def sensor_resp():
                 "new": False,
                 "data": {
                     "temperature": 42,
-                }
+                },
             },
             "hydrofor": {
                 "time": "2021-12-31T00:13:37.12345",
                 "new": True,
-                "data": {
-                    "temperature": -42,
-                    "humidity": 99.9,
-                    "airpressure": 999.9
-                }
-            }
-        }
+                "data": {"temperature": -42, "humidity": 99.9, "airpressure": 999.9},
+            },
+        },
     }
