@@ -22,15 +22,6 @@ router = MyRouterAPI(prefix=PREFIX, tags=TAGS).router
 
 # Routing
 @router.get("/")
-async def root():
-    data: dict | None = r_conn.get("sensors")
-    if data:
-        return data
-    raise HTTPException(status_code=404)
-
-
-# Routing
-@router.get("/data")
 async def get_sensor_data():
     data: dict | None = r_conn.get("sensors")
     if data:
@@ -119,29 +110,32 @@ async def get_relay_status():
 
 
 # Insert data to database
-@router.post("/db")
-async def insert_db(data: LocationSensorData, db: Session = Depends(get_db)):
+@router.post("/")
+async def insert_db(location_data: LocationSensorData, db: Session = Depends(get_db)):
     curr_time = datetime.utcnow()
     crud.add_timestamp(db, dbschemas.TimeStamp(time=curr_time))
-    for location in data.__root__:
+    for location, devicedata in location_data.items():
         if crud.get_location(db, name=location) is None:
             crud.add_location(db, name=location)
-        for device in data.__root__[location].__root__:  # TODO Add deviceMeasures somewhere...
+        for device, data in devicedata.items():
             if crud.get_device(db, name=device) is None:
                 crud.add_device(db, name=device)
-            if data.__root__[location].__root__[device].new:
-                for key, value in data.__root__[location].__root__[device].data.__root__.items():
-                    if crud.get_mtype(db, name=key) is None:
-                        crud.add_mtype(db, name=key)
-                    crud.add_measurement(
-                        db,
-                        dbschemas.Measurements(
-                            name=location,
-                            device=dbschemas.Device(name=device),
-                            mtype=dbschemas.MeasureType(name=key),
-                            time=dbschemas.TimeStamp(time=curr_time),
-                            value=value,
-                        ),
-                    )
-                f._set_json(r_conn, f".{location}.{device}.new", False)
+            if not data.new:
+                continue
+            for mtype, value in data.data.items():
+                if crud.get_mtype(db, name=mtype) is None:
+                    crud.add_mtype(db, name=mtype)
+                if crud.get_device_measures(db, device, mtype) is None:
+                    crud.add_device_measures(db, device, mtype)
+                crud.add_measurement(
+                    db,
+                    dbschemas.Measurements(
+                        name=location,
+                        device=dbschemas.Device(name=device),
+                        mtype=dbschemas.MeasureType(name=mtype),
+                        time=dbschemas.TimeStamp(time=curr_time),
+                        value=value,
+                    ),
+                )
+            f._set_json(r_conn, f".{location}.{device}.new", False)
     return Response(status_code=204)

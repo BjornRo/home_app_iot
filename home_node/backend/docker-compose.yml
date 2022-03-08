@@ -40,57 +40,57 @@ services:
     restart: always
     command: redis-server --loadmodule librejson.so
 
-  # sensor_logger_db:
-  #   container_name: sensor_logger_db
-  #   restart: unless-stopped
-  #   build:
-  #     context: ./sensor_logger_db
-  #     dockerfile: sensor_logger_db.dockerfile
-  #   env_file: .env
-  #   <<: *redis-db-env
-  #   volumes:
-  #     - /etc/timezone:/etc/timezone:ro
-  #     - /etc/localtime:/etc/localtime:ro
-  #     - ./appdata/db:/db
-  #     - ./sensor_logger_db:/app
-  #   depends_on:
-  #     - service_layer_api
-  #   command: python3 main.py --verbose
+  sensor_logger_db:
+    container_name: sensor_logger_db
+    restart: unless-stopped
+    build:
+      context: ./sensor_logger_db
+      dockerfile: sensor_logger_db.dockerfile
+    env_file: .env
+    <<: *redis-db-env
+    volumes:
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - ./appdata/db:/db
+      - ./sensor_logger_db:/app
+    depends_on:
+      - service_layer_api
+    command: python3 main.py --verbose
 
-  # sensor_mqtt_listener:
-  #   container_name: sensor_mqtt_listener
-  #   build:
-  #     context: ./sensor_mqtt_listener
-  #     dockerfile: sensor_mqtt_listener.dockerfile
-  #   env_file: .env
-  #   <<: *redis-db-env
-  #   volumes:
-  #     - /etc/timezone:/etc/timezone:ro
-  #     - /etc/localtime:/etc/localtime:ro
-  #     - ./sensor_mqtt_listener:/app
-  #   depends_on:
-  #     - service_layer_api
-  #   restart: unless-stopped
-  #   command: python3 main.py --verbose
+  sensor_mqtt_listener:
+    container_name: sensor_mqtt_listener
+    build:
+      context: ./sensor_mqtt_listener
+      dockerfile: sensor_mqtt_listener.dockerfile
+    env_file: .env
+    <<: *redis-db-env
+    volumes:
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - ./sensor_mqtt_listener:/app
+    depends_on:
+      - service_layer_api
+    restart: unless-stopped
+    command: python3 main.py --verbose
 
-  # sensor_remote_fetch:
-  #   container_name: sensor_remote_fetch
-  #   build:
-  #     context: ./sensor_remote_fetch
-  #     dockerfile: sensor_remote_fetch.dockerfile
-  #   env_file: .env
-  #   <<: *redis-db-env
-  #   volumes:
-  #     - /etc/timezone:/etc/timezone:ro
-  #     - /etc/localtime:/etc/localtime:ro
-  #     - ./appdata/certbot/letsencrypt:/etc/letsencrypt
-  #     - ./sensor_remote_fetch:/app
-  #   ports:
-  #     - 42661:42661
-  #   depends_on:
-  #     - service_layer_api
-  #   restart: unless-stopped
-  #   command: python3 main.py --verbose
+  sensor_remote_fetch:
+    container_name: sensor_remote_fetch
+    build:
+      context: ./sensor_remote_fetch
+      dockerfile: sensor_remote_fetch.dockerfile
+    env_file: .env
+    <<: *redis-db-env
+    volumes:
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - ./appdata/certbot/letsencrypt:/etc/letsencrypt
+      - ./sensor_remote_fetch:/app
+    ports:
+      - 42661:42661
+    depends_on:
+      - service_layer_api
+    restart: unless-stopped
+    command: python3 main.py --verbose
 
   service_layer_api:
     container_name: service_layer_api

@@ -1,16 +1,13 @@
-import logging
 from datetime import datetime
 from pydantic import BaseModel, root_validator
 from typing import Tuple
 
 
-# {"pizw": {"time": "2022-03-06T22:33:53.631231", "data": {"temperature": -99}},}
-# ({"pizw": ["2022-03-06T22:33:53.631231", {"temperature": -99}]})
-
-
-# Data expected as unaltered as possible from devices
 class MeasurementData(BaseModel):
     __root__: dict[str, float | int]
+
+    def items(self):
+        return self.__root__.items()
 
     def __iter__(self):
         return iter(self.__root__)
@@ -82,6 +79,9 @@ class RawDeviceData(BaseModel):
 class RawLocationData(BaseModel):
     __root__: dict[str, RawDeviceData | Tuple[datetime, RawListData | MeasurementData]]
 
+    def items(self):
+        return self.__root__.items()
+
     def __iter__(self):
         return iter(self.__root__)
 
@@ -110,6 +110,24 @@ class Data(BaseModel):
 class DeviceData(BaseModel):
     __root__: dict[str, Data]
 
+    def items(self):
+        return self.__root__.items()
+
+    def __getitem__(self, item):
+        return self.__root__[item]
+
+    def __iter__(self):
+        return iter(self.__root__)
+
 
 class LocationSensorData(BaseModel):
     __root__: dict[str, DeviceData]
+
+    def items(self):
+        return self.__root__.items()
+
+    def __getitem__(self, item):
+        return self.__root__[item]
+
+    def __iter__(self):
+        return iter(self.__root__)

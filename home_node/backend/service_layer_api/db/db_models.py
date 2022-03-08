@@ -81,4 +81,4 @@ class Measurements(Base):
     device = Column(String, ForeignKey("devices.name"), primary_key=True)
     mtype = Column(String, ForeignKey("measureTypes.name"), primary_key=True)
     time = Column(String, ForeignKey("timestamps.time"), primary_key=True)
-    value = Column(Float)
+    value = Column(Float, nullable=False)

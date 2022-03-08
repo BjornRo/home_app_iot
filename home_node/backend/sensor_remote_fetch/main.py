@@ -12,7 +12,6 @@ from threading import Thread
 SERVICE_API = os.environ["SERVICE_API"] + "/"
 BLOCK_LIST_API = SERVICE_API + "blocklist/"
 
-
 # SSL Context
 HOSTNAME = os.environ['HOSTNAME']
 SSLPATH = f"/etc/letsencrypt/live/{HOSTNAME}/"

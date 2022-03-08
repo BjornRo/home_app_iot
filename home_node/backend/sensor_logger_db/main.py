@@ -7,7 +7,7 @@ from time import sleep
 # Task every:
 TASK_TIMES = (":30", ":00")
 
-SERVICE_API = os.environ["SERVICE_API"] + "/sensors"
+SERVICE_API = os.environ["SERVICE_API"] + "/sensors/"
 
 
 def main():
@@ -25,9 +25,9 @@ def main():
 
 def querydb() -> None:
     for _ in range(2):
-        resp = requests.get(SERVICE_API + "/data")
+        resp = requests.get(SERVICE_API)
         if resp:
-            requests.post(SERVICE_API + "/db", json=resp.json())
+            requests.post(SERVICE_API, json=resp.json())
             return
         sleep(0.1)
 
