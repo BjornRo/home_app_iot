@@ -1,9 +1,8 @@
 import redis
 from ._sensors_schemas import *
-from ast import literal_eval
+from contextlib import suppress
 from datetime import datetime
 from redis.commands.json import JSON as REJSON_Client
-from contextlib import suppress
 
 # Has to be in order due to shape of data. [temp, humid, airpressure].
 # Only if device sends data with out any key/label
@@ -75,8 +74,3 @@ def _set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors"):
         is_root = False
         rebuild_path = tmp
     r_conn.set(rootkey, rebuild_path, elem)
-
-
-# for i in SUB_TOPICS:
-#     _set_json(r_conn, ".home." + i.split("/")[0], {})
-# _set_json(r_conn, ".home.balcony.relay", {})

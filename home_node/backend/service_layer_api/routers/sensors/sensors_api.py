@@ -7,8 +7,8 @@ from contextlib import suppress
 from datetime import datetime
 from fastapi import Depends, HTTPException, Response
 from fastapi.responses import JSONResponse
-from main import r_conn, get_db
-from sqlalchemy.orm import Session
+from main import r_conn, get_session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Tuple
 
 # Settings
@@ -111,24 +111,24 @@ async def get_relay_status():
 
 # Insert data to database
 @router.post("/")
-async def insert_db(location_data: LocationSensorData, db: Session = Depends(get_db)):
+async def insert_db(location_data: LocationSensorData, session: AsyncSession = Depends(get_session)):
     curr_time = datetime.utcnow()
-    crud.add_timestamp(db, dbschemas.TimeStamp(time=curr_time))
+    await crud.add_timestamp(session, dbschemas.TimeStamp(time=curr_time))
     for location, devicedata in location_data.items():
-        if crud.get_location(db, name=location) is None:
-            crud.add_location(db, name=location)
+        if await crud.get_location(session, name=location) is None:
+            await crud.add_location(session, name=location)
         for device, data in devicedata.items():
-            if crud.get_device(db, name=device) is None:
-                crud.add_device(db, name=device)
+            if await crud.get_device(session, name=device) is None:
+                await crud.add_device(session, name=device)
             if not data.new:
                 continue
             for mtype, value in data.data.items():
-                if crud.get_mtype(db, name=mtype) is None:
-                    crud.add_mtype(db, name=mtype)
-                if crud.get_device_measures(db, device, mtype) is None:
-                    crud.add_device_measures(db, device, mtype)
-                crud.add_measurement(
-                    db,
+                if await crud.get_mtype(session, name=mtype) is None:
+                    await crud.add_mtype(session, name=mtype)
+                if await crud.get_device_measures(session, device, mtype) is None:
+                    await crud.add_device_measures(session, device, mtype)
+                await crud.add_measurement(
+                    session,
                     dbschemas.Measurements(
                         name=location,
                         device=dbschemas.Device(name=device),

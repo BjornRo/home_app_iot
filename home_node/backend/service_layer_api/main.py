@@ -1,5 +1,4 @@
 import os
-from typing import AsyncGenerator
 import redis
 import pathlib
 from fastapi import FastAPI
@@ -7,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from importlib import import_module
 from redis.commands.json import JSON as REJSON_Client
 from routers import MyRouterAPI
+from typing import AsyncGenerator
 
 
 import db.db_models as db_models
