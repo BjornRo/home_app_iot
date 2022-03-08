@@ -1,7 +1,6 @@
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Float, DateTime, Sequence
-from sqlalchemy.orm import relationship
 
-from db.db import Base
+from db.db_config import Base
 
 # Users
 class Users(Base):
@@ -23,7 +22,7 @@ class UserDescription(Base):
 # TODO remove this table.
 # I don't want to store passwords in a separate file during development.
 class UserPasswordCleartext(Base):
-    __tablename__ = "userpasswordsclear"
+    __tablename__ = "userpasswordclear"
 
     userid = Column(Integer, ForeignKey("users.id"), primary_key=True)
     clear_password = Column(String, nullable=False)

@@ -1,4 +1,5 @@
 import os
+from typing import AsyncGenerator
 import redis
 import pathlib
 from fastapi import FastAPI
@@ -7,8 +8,9 @@ from importlib import import_module
 from redis.commands.json import JSON as REJSON_Client
 from routers import MyRouterAPI
 
+
 import db.db_models as db_models
-from db.db import SessionLocal, engine
+from db.db_config import engine, async_session
 
 
 app = FastAPI()
@@ -21,19 +23,17 @@ r_conn: REJSON_Client = redis.Redis(
     host=REJSON_HOST, port=6379, db=int(os.getenv("DBSENSOR", "0"))
 ).json()
 
-# TODO change to async
-# https://fastapi.tiangolo.com/advanced/async-sql-databases/
 
 # Db
-db_models.Base.metadata.create_all(bind=engine)
+@app.on_event("startup")
+async def startup():
+    async with engine.begin() as conn:
+        await conn.run_sync(db_models.Base.metadata.create_all)
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+async def get_session() -> AsyncGenerator:
+    async with async_session() as session:
+        yield session
 
 
 origins = [  # Internal routing using dnsmasq on my router.

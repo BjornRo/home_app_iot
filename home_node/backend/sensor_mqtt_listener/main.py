@@ -9,7 +9,7 @@ from time import sleep
 # Addresses
 MQTT_HOST = "home.1d"
 LOCATION = "home/"
-SERVICE_API = os.environ["SERVICE_API"] + "/sensors" + LOCATION
+SERVICE_API = os.environ["SERVICE_API"] + "/sensors/" + LOCATION
 
 # MQTT subscription
 RELAY_STATUS_PATH = "balcony/relay/status"
