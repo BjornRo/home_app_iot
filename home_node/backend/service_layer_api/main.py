@@ -44,13 +44,6 @@ origins = [  # Internal routing using dnsmasq on my router.
     "http://www.home",
 ]
 
-# Load additonal public urls, hiding it at the moment to reduce risk of DoS attack on my own network.
-url: str
-with open("hidden_urls.json", "r") as f:
-    for url in ujson.load(f)["urls"]:
-        origins.append("http://" + url)
-        origins.append("https://" + url)
-
 
 app.add_middleware(
     CORSMiddleware,
