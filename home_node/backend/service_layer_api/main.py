@@ -1,7 +1,6 @@
 import os
 import redis
 import pathlib
-import ujson
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from importlib import import_module
@@ -22,6 +21,8 @@ r_conn: REJSON_Client = redis.Redis(
     host=REJSON_HOST, port=6379, db=int(os.getenv("DBSENSOR", "0"))
 ).json()
 
+# TODO change to async
+# https://fastapi.tiangolo.com/advanced/async-sql-databases/
 
 # Db
 db_models.Base.metadata.create_all(bind=engine)
