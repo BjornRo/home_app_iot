@@ -5,6 +5,7 @@ from contextlib import suppress
 import requests
 import logging
 import socket
+import json
 import zlib
 import ssl
 
@@ -38,79 +39,76 @@ REJSON_HOST = "rejson"
 
 def main() -> None:
     with requests.Session() as session:
-        with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as srv:
-            socket.setdefaulttimeout(3)  # For ssl handshake and auth.
-            srv.bind(("", S_PORT))
-            srv.listen(8)
-            logging.info("Socket server listening on: '{}':{}".format(*srv.getsockname()[:2]))
-            with context.wrap_socket(srv, server_side=True) as sslsrv:
-                while 1:
-                    try:
-                        # if timeout, client is not connected.
-                        client, (c_ip, c_port) = sslsrv.accept()
-                        logging.info("Client connected from ip:" + c_ip)
-                        if not _is_banned_blocklist(session, c_ip, c_port):
-                            Thread(
-                                target=client_handler, args=(session, client), daemon=True
-                            ).start()
-                        else:
-                            logging.warning("Client is banned: " + c_ip)
-                    except Exception as e:  # Don't care about faulty clients with no SSL wrapper.
-                        logging.info("Client tried to connect without SSL context: " + str(e))
+        srv = socket.create_server(("", S_PORT), family=socket.AF_INET6, dualstack_ipv6=True)
+        socket.setdefaulttimeout(4)  # For ssl handshake and auth.
+        srv.listen(8)
+        logging.info("Socket server listening on: '{}':{}".format(*srv.getsockname()[:2]))
+        with context.wrap_socket(srv, server_side=True) as sslsrv:
+            while 1:
+                try:
+                    client, addr = sslsrv.accept()
+                    ip_addr = addr[0]
+                    logging.info("Client connected from ip:" + ip_addr)
+                    if not _is_banned_blocklist(session, ip_addr):
+                        Thread(
+                            target=client_handler, args=(session, client, ip_addr), daemon=True
+                        ).start()
+                    else:
+                        # TODO, uncomment_block_user(session, ip_addr)
+                        logging.warning("Client is banned: " + ip_addr)
+                        with suppress(Exception):
+                            client.close()
+                except Exception as e:
+                    logging.info("Client SSL exception: " + str(e))
 
 
-def client_handler(session: requests.Session, client: ssl.SSLSocket) -> None:
+def client_handler(session: requests.Session, client: ssl.SSLSocket, ip: str) -> None:
     try:
-        location_name, passwd = _recvall(client, ord(client.recv(1))).decode().split("\n")
-
+        location_name, passwd = _recvall(client, ord(_recvall(client, 1))).decode().split("\n")
         valid: bool = session.post(
             SERVICE_API + "auth/verify", json={"username": location_name, "password": passwd}
         ).json()
 
         if not valid:
-            return _block_user(session, client.getpeername()[0])
+            logging.warning(f"Client failed login, [usr: {location_name}, pw: {passwd}]")
+            return  # TODO, uncomment _block_user(session, ip)
 
         client.settimeout(60)
         client.send(b"OK")
 
         while 1:
-            payload_len = int.from_bytes(_recvall(client, 3, 3), "big")
+            payload_len = int.from_bytes(_recvall(client, 2, 2), "big")
             if not (0 < payload_len <= MAX_PAYLOAD_SOCKET):
+                logging.warning(f"Client tries to send invalid data length: >= {payload_len} bytes")
                 break
             recvdata = _recvall(client, payload_len, MAX_PAYLOAD_SOCKET)
-            if not recvdata:
-                break
             with suppress(zlib.error):
                 recvdata = zlib.decompress(recvdata)
             if not _send_to_service_layer(session, location_name, recvdata):
+                logging.warning(f"Bad data sent from: {location_name}, {recvdata.decode()[:20]}")
                 break
     except socket.timeout as e:
-        logging.info("Socket timeout: " + str(e))
-    except ValueError as e:
-        logging.info(e)
+        logging.info(f"Socket timeout, ip: {ip}, {e}")
+    except ConnectionAbortedError as e:
+        loc = ""
+        with suppress(NameError):
+            loc = location_name  # type:ignore
+        logging.info(f"Socket disconnected, [ip: {ip}, location: {loc}, reason: {e}]")
+    except TypeError:
+        logging.info("Client sent invalid start header")
     except Exception as e:  # Just to log if any other important exceptions are raised
         logging.warning("Exception from client handler: " + str(e))
     with suppress(Exception):
         client.close()
 
 
-# {"pizw": ["2022-03-06T22:33:53.631231", {"temperature": -99}], "hydrofor": ["2022-03-06T22:33:53.631231", {"temperature": -99, "humidity": -99, "airpressure": -99}]}
-# {"pizw": {"time":"2022-03-06T22:33:53.631231", "data":{"temperature": -99}}, "hydrofor": {"time":"2022-03-06T22:33:53.631231", "data":{"temperature": -99, "humidity": -99, "airpressure": -99}}}
-def _send_to_service_layer(session: requests.Session, location_name: str, payload: bytes) -> bool:
+def _send_to_service_layer(s: requests.Session, location_name: str, json_payload: bytes) -> bool:
     # Payload should already be dumped json-data in bytes form. json.loads loads bytes.
-    if session.post(f"{SERVICE_API}sensors/{location_name}", data=payload).status_code >= 400:
-        logging.warning("Bad data sent from: " + location_name + ", " + payload.decode()[:20])
-        return False
-    else:
-        return True
+    return s.post(f"{SERVICE_API}sensors/{location_name}", data=json_payload).status_code < 300
 
 
-def _is_banned_blocklist(session: requests.Session, ip_addr: str, port: str) -> bool:
-    if not session.get(BLOCK_LIST_API + "isbanned" + ip_addr).json():
-        return False
-
-    _block_user(session, ip_addr)
-    return True
+def _is_banned_blocklist(s: requests.Session, ip_addr: str) -> bool:
+    return s.get(BLOCK_LIST_API + "isbanned/" + ip_addr).json()
 
 
 def _block_user(session: requests.Session, ip_addr: str) -> None:
@@ -153,7 +151,7 @@ def _recvall(client: ssl.SSLSocket, size: int, buf_size=4096) -> bytes:
     while remaining > 0:
         received = client.recv(min(remaining, buf_size))
         if not received:
-            return b""
+            raise ConnectionAbortedError("recv received zero-byte")
         received_chunks.append(received)
         remaining -= len(received)
     return b"".join(received_chunks)

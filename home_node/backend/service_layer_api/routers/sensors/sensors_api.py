@@ -128,7 +128,7 @@ async def insert_db(data: LocationSensorData, db: Session = Depends(get_db)):
     for location in data.__root__:
         if crud.get_location(db, name=location) is None:
             crud.add_location(db, name=location)
-        for device in data.__root__[location].__root__:
+        for device in data.__root__[location].__root__: #TODO Add deviceMeasures somewhere...
             if crud.get_device(db, name=device) is None:
                 crud.add_device(db, name=device)
             if data.__root__[location].__root__[device].new:

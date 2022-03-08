@@ -76,6 +76,8 @@ services:
       - ./appdata/certbot/letsencrypt:/etc/letsencrypt
       - ./sensor_remote_fetch:/app
     restart: always
+    ports:
+      - 42661:42661
     build:
       context: ./sensor_remote_fetch
       dockerfile: sensor_remote_fetch.dockerfile
