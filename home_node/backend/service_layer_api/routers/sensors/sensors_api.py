@@ -5,7 +5,7 @@ from ._sensors_schemas import *
 from .. import MyRouterAPI
 from contextlib import suppress
 from datetime import datetime
-from fastapi import Depends, HTTPException, Response, Query
+from fastapi import Depends, HTTPException, Response
 from fastapi.responses import JSONResponse
 from main import r_conn, get_session
 from sqlalchemy.ext.asyncio import AsyncSession
