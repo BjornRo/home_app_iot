@@ -30,7 +30,7 @@ async def add_blocklist_ip(
 
 
 # Update ban, sets datetime, attempts to the sent ones
-@router.put("/")
+@router.put("/", response_model=schemas.Blocklist)
 async def update_blocklist_ip(
     obj: schemas.BlocklistUpdate, session: AsyncSession = Depends(get_session)
 ):
@@ -41,7 +41,7 @@ async def update_blocklist_ip(
 
 
 # Get ip
-@router.get("/{ip}")
+@router.get("/{ip}", response_model=schemas.Blocklist)
 async def get_blocklist_ip(ip: str, session: AsyncSession = Depends(get_session)):
     item = await crud.get_blocklist_item(session, ip)
     return ip_path_blocklist_item(item)
@@ -57,7 +57,7 @@ async def del_blocklist_ip(ip: str, session: AsyncSession = Depends(get_session)
 
 
 # Unban ip by setting ban_expire to dt.min and attempt_counter to 0
-@router.put("/{ip}")
+@router.put("/{ip}", response_model=schemas.Blocklist)
 async def unban_blocklist_ip(ip: str, session: AsyncSession = Depends(get_session)):
     item = await crud.get_blocklist_item(session, ip)
     if item:
@@ -66,7 +66,7 @@ async def unban_blocklist_ip(ip: str, session: AsyncSession = Depends(get_sessio
 
 
 # Update attempt counter by 1 and return the current counter
-@router.patch("/{ip}")
+@router.patch("/{ip}", response_model=int)
 async def increment_attempts_blocklist_item(ip: str, session: AsyncSession = Depends(get_session)):
     item = await crud.get_blocklist_item(session, ip)
     if item:
@@ -85,7 +85,7 @@ def ip_path_blocklist_item(item):
 
 
 # Check if ip address is banned.
-@router.get("/isbanned/{ip}")
+@router.get("/isbanned/{ip}", response_model=bool)
 async def ip_is_banned(ip: str, session: AsyncSession = Depends(get_session)):
     item = await crud.get_blocklist_item(session, ip)
     if item:

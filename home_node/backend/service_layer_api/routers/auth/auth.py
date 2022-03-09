@@ -39,7 +39,7 @@ async def add_user(user: schemas.UserCreate, session: AsyncSession = Depends(get
     return schemas.Users.from_orm(usr)
 
 
-@router.get("/{username}")
+@router.get("/{username}", response_model=schemas.Users)
 async def get_user(username: str, session: AsyncSession = Depends(get_session)):
     db_user = await crud.get_user(session, username=username)
     return delget_user(db_user)

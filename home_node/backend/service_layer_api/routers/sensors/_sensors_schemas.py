@@ -4,7 +4,7 @@ from typing import Tuple
 
 
 class MeasurementData(BaseModel):
-    __root__: dict[str, float | int]
+    __root__: dict[str, float]
 
     def items(self):
         return self.__root__.items()
@@ -23,45 +23,14 @@ class MeasurementData(BaseModel):
         return {"__root__": {k.lower(): v for k, v in values["__root__"].items()}}
 
 
-class RawShallowList(BaseModel):
-    __root__: list[float | int]
-
-    def __iter__(self):
-        return iter(self.__root__)
-
-    def __getitem__(self, index):
-        return self.__root__[index]
-
-    def __bool__(self):
-        return bool(self.__root__)
-
-
-class RawTupleList(BaseModel):
-    __root__: list[Tuple[str, float | int]]
-
-    def __iter__(self):
-        return iter(self.__root__)
-
-    def __getitem__(self, index):
-        return self.__root__[index]
-
-    def __bool__(self):
-        return bool(self.__root__)
-
-    @root_validator
-    def lower_case(cls, values):
-        if values:
-            items = values["__root__"]
-            if items and isinstance(items[0], list | tuple):
-                return {"__root__": [(k[0].lower(), k[1]) for k in items if k]}
-        return values
-
-
 class RawListData(BaseModel):
-    __root__: RawShallowList | RawTupleList
+    __root__: list[float]
 
     def __iter__(self):
         return iter(self.__root__)
+
+    def __getitem__(self, index):
+        return self.__root__[index]
 
     def __bool__(self):
         return bool(self.__root__)

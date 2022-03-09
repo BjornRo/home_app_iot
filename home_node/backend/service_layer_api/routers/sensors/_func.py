@@ -18,9 +18,9 @@ def transform_to_dict(data: RawListData | MeasurementData) -> MeasurementData | 
     if isinstance(data, MeasurementData):
         return data
 
-    # List of tuples is just applying dict()
-    if isinstance(data.__root__, RawTupleList):
-        return MeasurementData.parse_obj(dict(data.__root__))
+    # # List of tuples is just applying dict()
+    # if isinstance(data.__root__, RawTupleList):
+    #     return MeasurementData.parse_obj(dict(data.__root__))
 
     return MeasurementData.parse_obj(dict(zip(UNLABELED_DATA, data)))
 

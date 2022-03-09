@@ -5,11 +5,12 @@ from ._sensors_schemas import *
 from .. import MyRouterAPI
 from contextlib import suppress
 from datetime import datetime
-from fastapi import Depends, HTTPException, Response
+from fastapi import Depends, HTTPException, Response, Query
 from fastapi.responses import JSONResponse
 from main import r_conn, get_session
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Tuple
+from pydantic import conlist
 
 # Settings
 PREFIX = "/sensors"
@@ -21,14 +22,12 @@ router = MyRouterAPI(prefix=PREFIX, tags=TAGS).router
 
 
 # Routing
-@router.get("/")
+@router.get("/", response_model=LocationSensorData)
 async def get_sensor_data():
     data: dict | None = r_conn.get("sensors")
-    if data:
-        with suppress(KeyError):
-            del data["home"]["balcony"]["relay"]
-        return data
-    raise HTTPException(status_code=404)
+    if data is None:
+        raise HTTPException(status_code=404)
+    return LocationSensorData.parse_obj(data)
 
 
 @router.get("/clear_redis")
@@ -47,7 +46,7 @@ async def post_location_data(location: str, data: RawLocationData):
     return resp
 
 
-@router.get("/{location}/{device}")
+@router.get("/{location}/{device}", response_model=Data)
 async def get_data(location: str, device: str):
     return r_conn.get("sensors", f".{location}.{device}")
 
@@ -93,7 +92,7 @@ async def post_data(
 
 
 @router.post("/home/balcony/relay/status")
-async def post_relay_status(data: list[int]):
+async def post_relay_status(data: conlist(int, min_items=4, max_items=4)):  # type:ignore
     if not set(data).difference(set((0, 1))) and len(data) == 4:
         f.set_json(r_conn, ".home.balcony.relay.status", data)
     else:
@@ -102,7 +101,7 @@ async def post_relay_status(data: list[int]):
     return Response(status_code=204)
 
 
-@router.get("/home/balcony/relay/status")
+@router.get("/home/balcony/relay/status", response_model=conlist(int, min_items=4, max_items=4))
 async def get_relay_status():
     with suppress(redis.exceptions.ResponseError):
         return r_conn.get("sensors", ".home.balcony.relay.status")
@@ -111,7 +110,9 @@ async def get_relay_status():
 
 # Insert data to database
 @router.post("/")
-async def insert_db(location_data: LocationSensorData, session: AsyncSession = Depends(get_session)):
+async def insert_db(
+    location_data: LocationSensorData, session: AsyncSession = Depends(get_session)
+):
     curr_time = datetime.utcnow()
     await crud.add_timestamp(session, dbschemas.TimeStamp(time=curr_time))
     for location, devicedata in location_data.items():

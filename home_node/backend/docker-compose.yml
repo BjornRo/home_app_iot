@@ -40,22 +40,22 @@ services:
     restart: always
     command: redis-server --loadmodule librejson.so
 
-  sensor_logger_db:
-    container_name: sensor_logger_db
-    restart: unless-stopped
-    build:
-      context: ./sensor_logger_db
-      dockerfile: sensor_logger_db.dockerfile
-    env_file: .env
-    <<: *redis-db-env
-    volumes:
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
-      - ./appdata/db:/db
-      - ./sensor_logger_db:/app
-    depends_on:
-      - service_layer_api
-    command: python3 main.py --verbose
+  # sensor_logger_db:
+  #   container_name: sensor_logger_db
+  #   restart: unless-stopped
+  #   build:
+  #     context: ./sensor_logger_db
+  #     dockerfile: sensor_logger_db.dockerfile
+  #   env_file: .env
+  #   <<: *redis-db-env
+  #   volumes:
+  #     - /etc/timezone:/etc/timezone:ro
+  #     - /etc/localtime:/etc/localtime:ro
+  #     - ./appdata/db:/db
+  #     - ./sensor_logger_db:/app
+  #   depends_on:
+  #     - service_layer_api
+  #   command: python3 main.py --verbose
 
   sensor_mqtt_listener:
     container_name: sensor_mqtt_listener
