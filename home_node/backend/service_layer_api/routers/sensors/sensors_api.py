@@ -35,15 +35,19 @@ async def psd():
     r_conn.set("sensors", ".", {})
 
 
-@router.post("/{location}")
+@router.post("/{location}", status_code=204)
 async def post_location_data(location: str, data: RawLocationData):
-    resp = Response(status_code=400)
-    for device, list_or_dict in data.__root__.items():
-        result = await post_data(location, device, list_or_dict)
+    n_valid = 0
+    for device, list_or_dict in data.items():
         # Allow atleast one device to update its data.
-        if result.status_code == 204:
-            resp = result
-    return resp
+        if 200 <= (await post_data(location, device, list_or_dict)).status_code <= 204:
+            n_valid += 1
+    if not n_valid:
+        return JSONResponse(status_code=422, content="All data sent was invalid")
+    elif n_valid == len(data.dict()):
+        return Response(status_code=204)
+    else:
+        return JSONResponse(status_code=422, content="Partial data sent was invalid")
 
 
 @router.get("/{location}/{device}", response_model=Data)
@@ -51,7 +55,7 @@ async def get_data(location: str, device: str):
     return r_conn.get("sensors", f".{location}.{device}")
 
 
-@router.post("/{location}/{device}")
+@router.post("/{location}/{device}", status_code=204)
 async def post_data(
     location: str,
     device: str,
@@ -62,33 +66,26 @@ async def post_data(
     else:
         time, payload = data
 
-    if time is None:
-        return JSONResponse(status_code=400, content={"message": "time is missing"})
-
     location, device = location.lower(), device.lower()
 
-    data_dict = f.transform_to_dict(payload)
+    data_model = f.transform_to_model(payload)
+    if data_model is None:
+        logging.warning(f"Empty data sent from: {location}, {device}")
+        return JSONResponse(status_code=422, content="Data is empty")
 
     if f.validate_time(r_conn, location, device, time):
-        if data_dict is not None:
-            with suppress(Exception):
-                new_data = {}
-                for k, v in data_dict.__root__.items():
-                    value = f.test_value(k, v)
-                    if value is None:
-                        logging.warning(f"Sensors invalid value: {device}, {k}: {v}")
-                        break
-                    new_data[k] = value
-                else:
-                    f.set_json(r_conn, f".{location}.{device}.data", new_data)
-                    f.set_json(r_conn, f".{location}.{device}.time", time.isoformat())
-                    f.set_json(r_conn, f".{location}.{device}.new", True)
-                    return Response(status_code=204)
+        for k, v in data_model.items():
+            if not f.test_value(k, v):
+                logging.warning(f"Sensors invalid value: {device}, {k}: {v}")
+                break
         else:
-            logging.warning(f"Sensors data malformed: {device}, {str(data)[:20]}")
+            f.set_json(r_conn, f".{location}.{device}.data", data_model.dict())
+            f.set_json(r_conn, f".{location}.{device}.time", time.isoformat())
+            f.set_json(r_conn, f".{location}.{device}.new", True)
+            return Response(status_code=204)
     else:
         logging.warning(f"Old data sent: {device}, {time.isoformat()}")
-    return Response(status_code=400)
+    return JSONResponse(status_code=422, content="Invalid data")
 
 
 @router.post("/home/balcony/relay/status")

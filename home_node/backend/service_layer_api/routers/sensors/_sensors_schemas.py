@@ -9,6 +9,9 @@ class MeasurementData(BaseModel):
     def items(self):
         return self.__root__.items()
 
+    def dict(self):
+        return self.__root__
+
     def __iter__(self):
         return iter(self.__root__)
 
@@ -37,7 +40,7 @@ class RawListData(BaseModel):
 
 
 class RawDeviceData(BaseModel):
-    time: datetime | None
+    time: datetime
     data: RawListData | MeasurementData
 
     @root_validator
@@ -50,6 +53,9 @@ class RawLocationData(BaseModel):
 
     def items(self):
         return self.__root__.items()
+
+    def dict(self):
+        return self.__root__
 
     def __iter__(self):
         return iter(self.__root__)
