@@ -26,7 +26,7 @@ router = MyRouterAPI(prefix=PREFIX, tags=TAGS).router
 async def get_sensor_data():
     data: dict | None = r_conn.get("sensors")
     if data is None:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail="Sensor data is missing")
     return LocationSensorData.parse_obj(data)
 
 
@@ -88,13 +88,13 @@ async def post_data(
     return JSONResponse(status_code=422, content="Invalid data")
 
 
-@router.post("/home/balcony/relay/status")
+@router.post("/home/balcony/relay/status", status_code=204)
 async def post_relay_status(data: conlist(int, min_items=4, max_items=4)):  # type:ignore
     if not set(data).difference(set((0, 1))) and len(data) == 4:
         f.set_json(r_conn, ".home.balcony.relay.status", data)
     else:
         logging.warning("Status data malformed: " + str(data)[:26])
-        return Response(status_code=400)
+        raise HTTPException(status_code=422, detail="Bad status data posted")
     return Response(status_code=204)
 
 
@@ -102,11 +102,11 @@ async def post_relay_status(data: conlist(int, min_items=4, max_items=4)):  # ty
 async def get_relay_status():
     with suppress(redis.exceptions.ResponseError):
         return r_conn.get("sensors", ".home.balcony.relay.status")
-    return JSONResponse(status_code=503, content={"message": "Relay status redis data is missing"})
+    raise HTTPException(status_code=503, detail="Relay status redis data is missing")
 
 
 # Insert data to database
-@router.post("/")
+@router.post("/", status_code=204)
 async def insert_db(
     location_data: LocationSensorData, session: AsyncSession = Depends(get_session)
 ):
