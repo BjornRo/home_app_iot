@@ -9,7 +9,7 @@ from redis.commands.json import JSON as REJSON_Client
 UNLABELED_DATA = ("temperature", "humidity", "airpressure")
 
 
-def _transform_to_dict(data: RawListData | MeasurementData) -> MeasurementData | None:
+def transform_to_dict(data: RawListData | MeasurementData) -> MeasurementData | None:
     # Data can't be empty
     if not data:
         return None
@@ -25,9 +25,8 @@ def _transform_to_dict(data: RawListData | MeasurementData) -> MeasurementData |
     return MeasurementData.parse_obj(dict(zip(UNLABELED_DATA, data)))
 
 
-# Tests and transforms data to suitable range
-def _test_value(location: str, key: str, value: int | float) -> int | float | None:
-    with suppress(TypeError): # Anything that isn't a number will be rejected.
+def test_value(key: str, value: int | float) -> int | float | None:
+    with suppress(TypeError):  # Anything that isn't a number will be rejected.
         min_range = max_range = None
         match key.lower():
             case "temperature":
@@ -40,20 +39,23 @@ def _test_value(location: str, key: str, value: int | float) -> int | float | No
                 min_range = 900
                 max_range = 1150
 
-        if min_range is not None and max_range is not None:
+        if not (min_range is None or max_range is None):
             if min_range <= value <= max_range:
                 return value
     return None
 
 
-def _validate_time(r_conn: REJSON_Client, location: str, device: str, new_time: datetime | None) -> bool:
-    path = f".{location}.{device}.time"
+def validate_time(
+    r_conn: REJSON_Client, location: str, device: str, new_time: datetime | None
+) -> bool:
     if new_time is not None:
         with suppress(ValueError):
             # Test if timeformat is valid
             try:
                 # Test if timedata exist, if not, then the time is "valid"
-                old_time = datetime.fromisoformat(r_conn.get("sensors", path))
+                old_time = datetime.fromisoformat(
+                    r_conn.get("sensors", f".{location}.{device}.time")
+                )
                 if old_time < new_time:
                     return True
             except redis.exceptions.ResponseError:
@@ -61,16 +63,17 @@ def _validate_time(r_conn: REJSON_Client, location: str, device: str, new_time: 
     return False
 
 
-def _set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors"):
-    if r_conn.get(rootkey) is None:
-        r_conn.set(rootkey, ".", {})
+def set_json(r_conn: REJSON_Client, path: str, elem, rootkey="sensors") -> bool:
+    try:
+        return r_conn.set(rootkey, path, elem)
+    except redis.exceptions.ResponseError:
+        if r_conn.get(rootkey) is None:
+            r_conn.set(rootkey, ".", {})
 
-    rebuild_path = ""
-    is_root = True
-    for p in path.split(".")[1:]:
-        tmp = rebuild_path + "." + p
-        if r_conn.get(rootkey, "." if is_root else rebuild_path).get(p) is None:
-            r_conn.set(rootkey, tmp, {})
-        is_root = False
-        rebuild_path = tmp
-    r_conn.set(rootkey, rebuild_path, elem)
+        rebuild_path = ""
+        for p in path.split(".")[1:]:
+            tmp = rebuild_path + "." + p
+            if r_conn.get(rootkey, "." if not rebuild_path else rebuild_path).get(p) is None:
+                r_conn.set(rootkey, tmp, {})
+            rebuild_path = tmp
+        return r_conn.set(rootkey, rebuild_path, elem)

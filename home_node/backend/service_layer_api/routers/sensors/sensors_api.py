@@ -68,22 +68,22 @@ async def post_data(
 
     location, device = location.lower(), device.lower()
 
-    data_dict = f._transform_to_dict(payload)
+    data_dict = f.transform_to_dict(payload)
 
-    if f._validate_time(r_conn, location, device, time):
+    if f.validate_time(r_conn, location, device, time):
         if data_dict is not None:
             with suppress(Exception):
                 new_data = {}
                 for k, v in data_dict.__root__.items():
-                    value = f._test_value(location, k, v)
+                    value = f.test_value(k, v)
                     if value is None:
                         logging.warning(f"Sensors invalid value: {device}, {k}: {v}")
                         break
                     new_data[k] = value
                 else:
-                    f._set_json(r_conn, f".{location}.{device}.data", new_data)
-                    f._set_json(r_conn, f".{location}.{device}.time", time.isoformat())
-                    f._set_json(r_conn, f".{location}.{device}.new", True)
+                    f.set_json(r_conn, f".{location}.{device}.data", new_data)
+                    f.set_json(r_conn, f".{location}.{device}.time", time.isoformat())
+                    f.set_json(r_conn, f".{location}.{device}.new", True)
                     return Response(status_code=204)
         else:
             logging.warning(f"Sensors data malformed: {device}, {str(data)[:20]}")
@@ -95,7 +95,7 @@ async def post_data(
 @router.post("/home/balcony/relay/status")
 async def post_relay_status(data: list[int]):
     if not set(data).difference(set((0, 1))) and len(data) == 4:
-        f._set_json(r_conn, ".home.balcony.relay.status", data)
+        f.set_json(r_conn, ".home.balcony.relay.status", data)
     else:
         logging.warning("Status data malformed: " + str(data)[:26])
         return Response(status_code=400)
@@ -137,5 +137,5 @@ async def insert_db(location_data: LocationSensorData, session: AsyncSession = D
                         value=value,
                     ),
                 )
-            f._set_json(r_conn, f".{location}.{device}.new", False)
+            f.set_json(r_conn, f".{location}.{device}.new", False)
     return Response(status_code=204)
