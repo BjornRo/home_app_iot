@@ -20,14 +20,13 @@ TAGS = ["sensors_api"]
 # To route the routings down the document.
 router = MyRouterAPI(prefix=PREFIX, tags=TAGS).router
 
-
 # Routing
 @router.get("/", response_model=LocationSensorData)
 async def get_sensor_data():
     data: dict | None = r_conn.get("sensors")
     if data is None:
         raise HTTPException(status_code=404, detail="Sensor data is missing")
-    return LocationSensorData.parse_obj(data)
+    return data
 
 
 @router.get("/clear_redis")
@@ -50,7 +49,7 @@ async def post_location_data(location: str, data: RawLocationData):
         return JSONResponse(status_code=422, content="Partial data sent was invalid")
 
 
-@router.get("/{location}/{device}", response_model=Data)
+@router.get("/{location}/{device}", response_model=DataPackage)
 async def get_data(location: str, device: str):
     return r_conn.get("sensors", f".{location}.{device}")
 
@@ -111,27 +110,28 @@ async def insert_db(
     location_data: LocationSensorData, session: AsyncSession = Depends(get_session)
 ):
     curr_time = datetime.utcnow()
-    await crud.add_timestamp(session, dbschemas.TimeStamp(time=curr_time))
+    time_id = (await crud.add_timestamp(session, curr_time)).id
     for location, devicedata in location_data.items():
         if await crud.get_location(session, name=location) is None:
             await crud.add_location(session, name=location)
         for device, data in devicedata.items():
-            if await crud.get_device(session, name=device) is None:
-                await crud.add_device(session, name=device)
+            db_dev = await crud.get_device(session, name=device)
+            if db_dev is None:
+                db_dev = await crud.add_device(session, name=device, location=location)
             if not data.new:
                 continue
             for mtype, value in data.data.items():
-                if await crud.get_mtype(session, name=mtype) is None:
-                    await crud.add_mtype(session, name=mtype)
-                if await crud.get_device_measures(session, device, mtype) is None:
-                    await crud.add_device_measures(session, device, mtype)
+                db_mtype = await crud.get_mtype(session, name=mtype)
+                if db_mtype is None:
+                    db_mtype = await crud.add_mtype(session, name=mtype)
+                if await crud.get_device_measures(session, db_dev.id) is None:
+                    await crud.add_device_measures(session, db_dev.id, db_mtype.id)
                 await crud.add_measurement(
                     session,
                     dbschemas.Measurements(
-                        name=location,
-                        device=dbschemas.Device(name=device),
-                        mtype=dbschemas.MeasureType(name=mtype),
-                        time=dbschemas.TimeStamp(time=curr_time),
+                        device_id=db_dev.id,
+                        measure_type_id=db_mtype.id,
+                        time_id=time_id,
                         value=value,
                     ),
                 )

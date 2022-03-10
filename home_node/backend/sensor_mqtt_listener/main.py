@@ -31,7 +31,7 @@ def mqtt_agent(mqtt: MQTTClient) -> None:
 
     def on_message(_client, _userdata, msg) -> None:
         topic: str = msg.topic.replace(LOCATION, "")
-        # JSON doesn't support paranthesises. "Legacy" from before time.
+        # JSON doesn't support paranthesises. My own "Legacy" from before time.
         data = ujson.loads(msg.payload.replace(b"(", b"[").replace(b")", b"]"))
 
         # Four statuses of 4 relays (0,1): [0,0,0,1]
@@ -45,7 +45,6 @@ def mqtt_agent(mqtt: MQTTClient) -> None:
             if isinstance(data, int | float):
                 data = [data]
             data = [i / 100 for i in data]
-
         _post_data(topic.split("/")[0], {"time": datetime.utcnow().isoformat(), "data": data})
 
     mqtt.on_connect = on_connect

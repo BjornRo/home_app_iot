@@ -28,6 +28,7 @@ r_conn: REJSON_Client = redis.Redis(
 @app.on_event("startup")
 async def startup():
     async with engine.begin() as conn:
+        #await conn.run_sync(db_models.Base.metadata.drop_all)
         await conn.run_sync(db_models.Base.metadata.create_all)
 
 

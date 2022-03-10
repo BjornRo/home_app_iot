@@ -33,14 +33,7 @@ async def add_user(session: AsyncSession, user: dbschemas.UserCreate, clear_pass
 async def del_user(session: AsyncSession, user: Users) -> Users:
     uid = user.id
     await session.delete(user)
-    # desc = (
-    #     (await session.execute(select(UserDescription).where(UserDescription.userid == uid)))
-    #     .scalars()
-    #     .first()
-    # )
-    # if desc:
-    #     await session.delete(desc)
-    await session.execute(delete(UserDescription).where(UserDescription.userid == uid))
+    #await session.execute(delete(UserDescription).where(UserDescription.userid == uid))
     # TODO Remove
     await session.execute(delete(UserPasswordCleartext).where(UserPasswordCleartext.userid == uid))
     await session.commit()
