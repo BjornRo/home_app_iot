@@ -1,0 +1,4 @@
+paho_mqtt
+requests
+ujson
+pydantic

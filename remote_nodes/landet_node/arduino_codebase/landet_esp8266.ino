@@ -6,9 +6,11 @@
 #define SSID ""
 #define PASS ""
 #define PORT 1883
-#define BROKER "192.168.1.200"
-#define MQTT_ID "hydrofor"
-#define PUBLISH "landet/hydrofor/temphumidpress"
+#define BROKER "mqtt.lan"
+#define MQTT_ID "hydrofor_unit"
+#define MQTT_USER ""
+#define MQTT_PASS ""
+#define PUBLISH "remote_sh/hydrofor/temphumidpress"
 
 // Sensor pins BME280
 BME280I2C bme;
@@ -23,7 +25,7 @@ float temp_f = -99.66;
 float humid_f = 555.66;
 float air_pressure_f = 5555.66;
 
-#define SEND_RECV_BUFFER_SIZE 22
+#define SEND_RECV_BUFFER_SIZE 70
 char send_buffer[SEND_RECV_BUFFER_SIZE];
 
 // WIFI, MQTT
@@ -37,7 +39,7 @@ void read_bme() {
 
 void _reconnect() {
     while (!mqtt.connected()) {
-        if (mqtt.connect(MQTT_ID)) {
+        if (mqtt.connect(MQTT_ID, MQTT_USER, MQTT_PASS)) {
             mqtt.publish("void", "hydrofor");
         } else {
             delay(5000);
@@ -61,8 +63,10 @@ void read_and_publish_temp() {
     read_bme();
     if (temp_f > 60 || temp_f < -50) return;
     if (humid_f > 105 || humid_f < 0) return;
-    if (air_pressure_f > 1250 || air_pressure_f < 700) return;
-    snprintf(send_buffer, SEND_RECV_BUFFER_SIZE, "(%d,%d,%d)", (int16_t)(temp_f * 100), (int16_t)(humid_f * 100), (int32_t)(air_pressure_f * 100));
+    if (air_pressure_f > 1350 || air_pressure_f < 700) return;
+    snprintf(send_buffer, SEND_RECV_BUFFER_SIZE,
+             "{\"temperature\":%.2f,\"humidity\":%.2f,\"airpressure\":%.2f}",
+             temp_f, humid_f, air_pressure_f);
     mqtt.publish(PUBLISH, send_buffer);
 }
 

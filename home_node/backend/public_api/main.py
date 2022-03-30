@@ -1,81 +1,38 @@
-from fastapi.middleware.cors import CORSMiddleware
-from importlib import import_module
-from routers import MyRouterAPI
-from databases import Database
-from secrets import token_hex
-from datetime import datetime
-from fastapi import FastAPI
-from os.path import isfile
-import json
-import pathlib
+import argparse
 import os
+import ujson
+import uvicorn
+from misc import AIOSession
+from routers import root
+from routers.auth import auth
+from routers.sensors import sensors_api
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 
 
 app = FastAPI()
 
-# Auth "constants". Easier to use readable strings and then use numbers to compare levels.
-# Required Level <= User Level.
-ACCESS_LEVELS = {"owner": 4, "admin": 3, "mod": 2, "user": 1, "disabled": 0}
-SECRET_KEY_FILE = "secretkeyfile"
-# Check if secret key exists, else randomly generate one.
-if not isfile(SECRET_KEY_FILE):
-    with open(SECRET_KEY_FILE, "w") as f:
-        f.write(token_hex(32))
-with open(SECRET_KEY_FILE, "r") as f:
-    SECRET_KEY = f.read().strip()
-
-
-# Database related
-DB_FILE = "main_app_db.db"  # TODO add /db/
-DB_TABLES = """
-CREATE TABLE users (
-    username VARCHAR(20) PRIMARY KEY,
-    password VARCHAR(100) NOT NULL,
-    access_level VARCHAR(8) NOT NULL,
-    created_date VARCHAR(19) NOT NULL,
-    comment TEXT NOT NULL
-)"""
-REJSON_HOST = "rejson"
-
-db = Database("sqlite:///" + DB_FILE)
-
-
-@app.on_event("startup")
-async def db_connect():
-    await db.connect()
-
-    # Check if databasefile exists
-    if isfile(DB_FILE):
-        return
-    # Create db file and import tables if db-file doesn't exist
-    await db.execute(query=DB_TABLES)
-
-    with open("default_users.json", "r") as f:
-        # {"admin": {"password":"pass", "access_level":"owner", "comment":"development"}}
-        for username, data_dict in json.load(f).items():
-            await db.execute(
-                "INSERT INTO users VALUES (:username, :password, :access_level, :created_date, :comment)",
-                data_dict | {"username": username, "created_date": datetime.now().isoformat("T", "minutes")}
-            )
-
-
-@app.on_event("shutdown")
-async def db_disconnect():
-    await db.disconnect()
-
+app.add_middleware(HTTPSRedirectMiddleware)
 origins = [  # Internal routing using dnsmasq on my router.
     "http://localhost",
+    "http://localhost:8080",
+    "http://localhost:7070",
     "http://192.168.1.173",
     "http://home.1d",
     "http://www.home",
-]
+] + [j + i for i in ujson.loads(os.environ["EXTRA_URLS"]) for j in ["http://", "https://"]]
 
-# Load additonal public urls, hiding it at the moment to reduce risk of DoS attack on my own network.
-url: str
-with open("hidden_urls.json", "r") as f:
-    for url in json.load(f)["urls"]:
-        origins.append("http://" + url)
-        origins.append("https://" + url)
+session = AIOSession()
+
+@app.on_event("startup")
+async def startup_event():
+    await session.start()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await session.stop()
 
 
 app.add_middleware(
@@ -86,21 +43,47 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Naivly add all routes in routes folder, only need to specify the important FastAPI parts.
-for dirpath, _, files in os.walk("routers"):
-    path = pathlib.Path(dirpath)
-    # Ignore folders with _
-    if path.match("_*"):
-        continue
+app.include_router(root.router)
+app.include_router(auth.router)
+app.include_router(sensors_api.router)
 
-    # Find loadable modules without _
-    for module in files:
-        # Don't load files/folders starting with '_'.
-        # Also works as commenting out routings; _routerNameFolder
-        if module.startswith("_"):
-            continue
-        # Each module should create a MyRouterAPI object which adds the routers to a list which the Class contains.
-        # This is a very convoluted way to fix the linter to stop yelling at me, and also easier to extend and maintain.
-        # The for loop loads the module which creates a router and adds to list in class, which we pop off and include to FastAPI.
-        import_module(f'{path.as_posix().replace("/", ".")}.{module.replace(".py", "")}')
-        app.include_router(MyRouterAPI.xs.pop())
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--reload", action="store_const", dest="reload", const=True, default=False)
+    parser.add_argument(
+        "-p",
+        "--port",
+        help="Port number",
+        dest="port",
+        type=int,
+        default=8000,
+        metavar="{0..65535}",
+    )
+    parser.add_argument(
+        "-d",
+        "--debug",
+        help="Print lots of debugging statements",
+        action="store_const",
+        dest="loglevel",
+        const="debug",
+        default="warning",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        help="Be verbose",
+        action="store_const",
+        dest="loglevel",
+        const="info",
+    )
+    args = parser.parse_args()
+
+    uvicorn.run(
+        "main:app",  # type: ignore
+        host="0.0.0.0",
+        port=args.port,
+        log_level=args.loglevel,
+        reload=args.reload,
+        ssl_keyfile=f'/etc/letsencrypt/live/{os.environ["HOSTNAME"]}/privkey.pem',
+        ssl_certfile=f'/etc/letsencrypt/live/{os.environ["HOSTNAME"]}/fullchain.pem',
+    )

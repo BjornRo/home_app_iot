@@ -10,5 +10,5 @@ class MyRouterAPI:
             raise ValueError("Prefix must be an unique path/address.")
         if tags is not None and isinstance(tags, list) and not tags:
             raise ValueError("Tags must be a non-empty list of strings")
-        self.router = APIRouter(prefix=prefix, tags=tags)
+        self.router = APIRouter(prefix=prefix, tags=tags) # type:ignore
         MyRouterAPI.xs.append(self.router)

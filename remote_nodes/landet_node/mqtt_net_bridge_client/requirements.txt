@@ -1,0 +1,4 @@
+paho_mqtt
+asyncio-mqtt
+ujson
+pydantic

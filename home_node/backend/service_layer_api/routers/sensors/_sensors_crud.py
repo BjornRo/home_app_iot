@@ -1,9 +1,8 @@
-from . import _sensors_db_schemas as dbschemas
+from pymodules.schemas import sensors_db_schemas as dbschemas
 from datetime import datetime
 from db.db_models import Devices, DeviceMeasures, Locations, Measurements, MeasureTypes, TimeStamps
-from sqlalchemy import func, select, and_
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 
 async def add_timestamp(session: AsyncSession, timestamp: datetime):

@@ -6,8 +6,10 @@
 #define SSID ""
 #define PASS ""
 #define PORT 1883
-#define BROKER "www.home"
-#define MQTT_ID "cykelrum_temp"
+#define BROKER "mqtt.lan"
+#define MQTT_ID "bikeroom_unit"
+#define MQTT_USER "bikeroom"
+#define MQTT_PASS ""
 #define PUBLISH "home/bikeroom/temp"
 
 // TX pin 1. DS18B20 sensor.
@@ -19,8 +21,8 @@ DallasTemperature sensors(&oneWire);
 #define UPDATE_TICK 5000
 uint32_t last_tick;
 uint32_t saved_time;
-int16_t temp = -5544;
-#define SEND_BUFFER_SIZE 6
+float temp = -55.44;
+#define SEND_BUFFER_SIZE 25
 char send_buffer[SEND_BUFFER_SIZE];
 
 // WIFI, MQTT
@@ -29,7 +31,7 @@ PubSubClient mqtt(wifi);
 
 void _reconnect() {
     while (!mqtt.connected()) {
-        if (mqtt.connect(MQTT_ID)) {
+        if (mqtt.connect(MQTT_ID, MQTT_USER, MQTT_PASS)) {
             mqtt.publish("void", "bikeroom");
         } else {
             delay(5000);
@@ -48,9 +50,9 @@ void setup(void) {
 
 void read_and_publish_temp() {
     sensors.requestTemperatures();
-    temp = (int16_t)(sensors.getTempCByIndex(0) * 100);
-    if (-5000 <= temp && temp <= 6000) {
-        snprintf(send_buffer, SEND_BUFFER_SIZE, "%d", temp);
+    temp = sensors.getTempCByIndex(0);
+    if (-50 <= temp && temp <= 60) {
+        snprintf(send_buffer, SEND_BUFFER_SIZE, "{\"temperature\":%.2f}", temp);
         mqtt.publish(PUBLISH, send_buffer);
     }
 }

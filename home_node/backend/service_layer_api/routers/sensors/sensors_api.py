@@ -1,7 +1,6 @@
 import logging
 import redis
-from . import _sensors_db_schemas as dbschemas, _sensors_crud as crud, _func as f
-from ._sensors_schemas import *
+from . import _sensors_crud as crud, _func as f
 from .. import MyRouterAPI
 from contextlib import suppress
 from datetime import datetime
@@ -10,7 +9,8 @@ from fastapi.responses import JSONResponse
 from main import r_conn, get_session
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Tuple
-from pydantic import conlist
+from pymodules.schemas import sensors_db_schemas as dbschemas
+from pymodules.schemas.sensors_schemas import *
 
 # Settings
 PREFIX = "/sensors"
@@ -28,7 +28,7 @@ async def get_sensor_data():
         raise HTTPException(status_code=404, detail="Sensor data is missing")
     return data
 
-
+# TODO Remove
 @router.get("/clear_redis")
 async def psd():
     r_conn.set("sensors", ".", {})
@@ -87,28 +87,23 @@ async def post_data(
     return JSONResponse(status_code=422, content="Invalid data")
 
 
-@router.post("/home/balcony/relay/status", status_code=204)
-async def post_relay_status(data: conlist(int, min_items=4, max_items=4)):  # type:ignore
-    if not set(data).difference(set((0, 1))) and len(data) == 4:
-        f.set_json(r_conn, ".home.balcony.relay.status", data)
-    else:
-        logging.warning("Status data malformed: " + str(data)[:26])
-        raise HTTPException(status_code=422, detail="Bad status data posted")
-    return Response(status_code=204)
 
-
-@router.get("/home/balcony/relay/status", response_model=conlist(int, min_items=4, max_items=4))
+@router.get("/home/balcony/relay/status", response_model=RelayStatus)
 async def get_relay_status():
     with suppress(redis.exceptions.ResponseError):
         return r_conn.get("sensors", ".home.balcony.relay.status")
     raise HTTPException(status_code=503, detail="Relay status redis data is missing")
 
 
+@router.post("/home/balcony/relay/status", status_code=204)
+async def post_relay_status(data: RelayStatus):
+    f.set_json(r_conn, ".home.balcony.relay.status", data.dict())
+    return Response(status_code=204)
+
+
 # Insert data to database
 @router.post("/", status_code=204)
-async def insert_db(
-    location_data: LocationSensorData, session: AsyncSession = Depends(get_session)
-):
+async def insert_db(location_data: LocationSensorData, session: AsyncSession = Depends(get_session)):
     curr_time = datetime.utcnow()
     time_id = (await crud.add_timestamp(session, curr_time)).id
     for location, devicedata in location_data.items():
@@ -124,14 +119,14 @@ async def insert_db(
                 db_mtype = await crud.get_mtype(session, name=mtype)
                 if db_mtype is None:
                     db_mtype = await crud.add_mtype(session, name=mtype)
-                if await crud.get_device_measures(session, db_dev.id) is None:
-                    await crud.add_device_measures(session, db_dev.id, db_mtype.id)
+                if await crud.get_device_measures(session, db_dev.id) is None:  # type:ignore
+                    await crud.add_device_measures(session, db_dev.id, db_mtype.id)  # type:ignore
                 await crud.add_measurement(
                     session,
                     dbschemas.Measurements(
-                        device_id=db_dev.id,
-                        measure_type_id=db_mtype.id,
-                        time_id=time_id,
+                        device_id=db_dev.id,  # type:ignore
+                        measure_type_id=db_mtype.id,  # type:ignore
+                        time_id=time_id,  # type:ignore
                         value=value,
                     ),
                 )

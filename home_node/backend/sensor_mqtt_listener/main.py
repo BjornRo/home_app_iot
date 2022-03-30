@@ -2,12 +2,13 @@ import logging
 import os
 import requests
 import ujson
+from contextlib import suppress
 from datetime import datetime
-from paho.mqtt.client import Client as MQTTClient
+from paho.mqtt.client import MQTTMessage, Client as MQTTClient
 from time import sleep
 
 # Addresses
-MQTT_HOST = "home.1d"
+MQTT_HOST = "mqtt.lan"
 LOCATION = "home/"
 SERVICE_API = os.environ["SERVICE_API"] + "/sensors/" + LOCATION
 
@@ -15,53 +16,55 @@ SERVICE_API = os.environ["SERVICE_API"] + "/sensors/" + LOCATION
 RELAY_STATUS_PATH = "balcony/relay/status"
 SUB_TOPICS = ["bikeroom/temp", "balcony/temphumid", "kitchen/temphumidpress"]
 
-# Raw measured values are multiplied by 100 and converted to int.
-MUL_INT_LIST = ["bikeroom/temp", "balcony/temphumid", "kitchen/temphumidpress"]
+# Replace json with ujson instead
+requests.models.complexjson = ujson  # type:ignore
+session = requests.Session()
 
+
+def on_connect(client, *_):
+    for topic in SUB_TOPICS + [RELAY_STATUS_PATH]:
+        client.subscribe(LOCATION + topic)
+
+
+def on_message(_client, _userdata, msg: MQTTMessage) -> None:
+    topic: str = msg.topic.replace(LOCATION, "")
+    data = ujson.loads(msg.payload)
+
+    with suppress(requests.exceptions.ConnectionError):
+        # Four statuses of 4 relays (0,1): [0,0,0,1]
+        if topic == RELAY_STATUS_PATH and isinstance(data, list):
+            if not set(data).difference(set((0, 1))) and len(data) == 4:
+                data = [bool(i) for i in data]
+                relays = {
+                    "light_full": data[0],
+                    "light_dim": data[1],
+                    "heater": data[2],
+                    "unused": data[3],
+                }
+                session.post(SERVICE_API + topic, json=relays)
+            return None
+
+        content = {"time": datetime.utcnow().isoformat(), "data": data}
+        session.post(SERVICE_API + topic.split("/")[0], json=content)
+        return None
 
 
 def main():
-    mqtt_agent(MQTTClient("sensor_mqtt_log"))
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
 
-
-def mqtt_agent(mqtt: MQTTClient) -> None:
-    def on_connect(client, *_):
-        for topic in SUB_TOPICS + [RELAY_STATUS_PATH]:
-            client.subscribe(LOCATION + topic)
-
-    def on_message(_client, _userdata, msg) -> None:
-        topic: str = msg.topic.replace(LOCATION, "")
-        # JSON doesn't support paranthesises. My own "Legacy" from before time.
-        data = ujson.loads(msg.payload.replace(b"(", b"[").replace(b")", b"]"))
-
-        # Four statuses of 4 relays (0,1): [0,0,0,1]
-        if topic == RELAY_STATUS_PATH:
-            _post_data(topic, data)
-            return
-
-        # Reduce the value by 100 to get the original values back.
-        if topic in MUL_INT_LIST:
-            # Convert to iterable due to "legacy". Single values were sent as value only.
-            if isinstance(data, int | float):
-                data = [data]
-            data = [i / 100 for i in data]
-        _post_data(topic.split("/")[0], {"time": datetime.utcnow().isoformat(), "data": data})
-
+    mqtt = MQTTClient("sensor_mqtt_log")
+    mqtt.username_pw_set(username=os.environ["NAME"], password=os.environ["PASS"])
     mqtt.on_connect = on_connect
     mqtt.on_message = on_message
     while True:
-        try:  # Wait until mqtt server is connectable. No need to read exceptions here.
+        with suppress(Exception):
+            # Wait until mqtt server is connectable. No need to read exceptions here.
             if mqtt.connect(MQTT_HOST, 1883, 60) == 0:
                 logging.info("Connected to mqtt!")
                 break
-        except:
-            pass
         sleep(5)
     mqtt.loop_forever()
-
-
-def _post_data(webpath: str, data: dict | list) -> requests.Response:
-    return requests.post(SERVICE_API + webpath, json=data)
+    session.close()
 
 
 if __name__ == "__main__":

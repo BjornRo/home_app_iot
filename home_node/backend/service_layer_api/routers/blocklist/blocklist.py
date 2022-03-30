@@ -1,9 +1,10 @@
-from . import _blocklist_schemas as schemas, _blocklist_crud as crud
+from . import _blocklist_crud as crud
 from .. import MyRouterAPI
 from datetime import datetime
 from fastapi import Depends, HTTPException
 from main import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
+from pymodules.schemas import blocklist as schemas
 
 # Settings
 PREFIX = "/blocklist"

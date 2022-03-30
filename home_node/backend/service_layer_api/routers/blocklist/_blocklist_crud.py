@@ -1,8 +1,8 @@
-from . import _blocklist_schemas as dbschemas
 from datetime import datetime
 from db.db_models import Blocklist
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from pymodules.schemas import blocklist as dbschemas
 
 
 

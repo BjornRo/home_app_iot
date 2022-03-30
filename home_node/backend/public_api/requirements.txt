@@ -1,9 +1,8 @@
+aiohttp
 fastapi
-uvicorn
-#pydantic
-bcrypt
-redis
-#databases
-python-multipart
-databases[sqlite]
+passlib[bcrypt]
 python-jose[cryptography]
+python-multipart
+redis
+ujson
+uvicorn

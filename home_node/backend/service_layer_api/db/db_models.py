@@ -1,5 +1,15 @@
 from db.db_config import Base
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Float, DateTime, Sequence, null
+from sqlalchemy import (
+    Boolean,
+    Column,
+    ForeignKey,
+    Integer,
+    String,
+    Float,
+    DateTime,
+    Sequence,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 
 # Users
@@ -11,9 +21,29 @@ class Users(Base):
     password = Column(String, nullable=False)
     date_added = Column(DateTime, nullable=False)
 
-    description = relationship(
-        "UserDescription", back_populates="user", cascade="all, delete", uselist=False
-    )
+    description = relationship("UserDescription", cascade="all, delete", uselist=False)
+    usertags = relationship("UserTags", back_populates="user", cascade="all, delete")
+
+
+class UserTags(Base):
+    __tablename__ = "users_tags"
+
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    tag = Column(String, ForeignKey("access_tags.tag"), primary_key=True)
+    date_granted = Column(DateTime, nullable=False)
+
+    user = relationship("Users", back_populates="usertags")
+    accesstag = relationship("AccessTags", back_populates="usertags")
+
+
+class AccessTags(Base):
+    __tablename__ = "access_tags"
+
+    tag = Column(String, primary_key=True)
+    comment = Column(String, nullable=False)
+    created_date = Column(DateTime, nullable=False)
+
+    usertags = relationship("UserTags", back_populates="accesstag", cascade="all, delete")
 
 
 class UserDescription(Base):
@@ -21,8 +51,6 @@ class UserDescription(Base):
 
     userid = Column(Integer, ForeignKey("users.id"), primary_key=True)
     text = Column(String, nullable=False)
-
-    user = relationship("Users", back_populates="description")
 
 
 # TODO remove this table.

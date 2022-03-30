@@ -3,18 +3,21 @@
 //#include <stdio.h>
 //#include <string.h>
 
-#define LED_BOARD 1  //pins_arduino.h says 1. Pinout says 0.
+#define LED_BOARD 1  // pins_arduino.h says 1. Pinout says 0.
 
 #define SSID ""
 #define PASS ""
+// MQTT
 #define PORT 1883
-#define BROKER "www.home"
+#define BROKER "mqtt.lan"
+#define MQTT_USER "balcony"
+#define MQTT_PASS ""
+#define MQTT_ID "balcony_unit"
 
-//IPAddress IP_ADDR(192, 168, 1, 233);
-//IPAddress GATEWAY(192, 168, 1, 1);
-//IPAddress SUBNET(255, 255, 255, 0);
+// IPAddress IP_ADDR(192, 168, 1, 233);
+// IPAddress GATEWAY(192, 168, 1, 1);
+// IPAddress SUBNET(255, 255, 255, 0);
 
-#define MQTT_ID "balcony"
 #define PUBLISH "home/balcony/temphumid"
 #define PUBLISH_STATUS "home/balcony/relay/status"
 #define SUBSCRIBE "home/balcony/relay/command/#"
@@ -28,11 +31,13 @@ WiFiClient wifi;
 PubSubClient mqtt(wifi);
 
 // Buffers
-#define SEND_BUFFER_SIZE 12
+#define SEND_BUFFER_SIZE 41
 #define RECEIVE_BUFFER_SIZE 20
 char SEND_BUFFER[SEND_BUFFER_SIZE];
 char RECEIVE_BUFFER[RECEIVE_BUFFER_SIZE];
-char topic_buff[10];
+char PAYLOAD_CPY[RECEIVE_BUFFER_SIZE];
+int16_t PAYLOAD_VALUES[3];
+float first, second;
 char ARDUINO_CHAR;
 char ARDUINO_DATA[RECEIVE_BUFFER_SIZE];
 
@@ -58,73 +63,58 @@ void receive_arduino() {
 }
 
 void publish_arduino() {
-    if (sscanf(RECEIVE_BUFFER, "(%c,%[(0-9,])", &ARDUINO_CHAR, &ARDUINO_DATA) == 2) {
+    // Add to the start of the array
+    if (sscanf(RECEIVE_BUFFER, "(%c,(%[^)])", &ARDUINO_CHAR, ARDUINO_DATA) == 2) {
         uint8_t strlength = strlen(ARDUINO_DATA);
         if (strlength > RECEIVE_BUFFER_SIZE - 1) {
-            // we need to have 1 slot open to append ')'. IF string is full, then data is invalid.
+            // we need to have 1 slot open to append ']'. IF string is full, then data is invalid.
             return;
         }
-        ARDUINO_DATA[strlength] = ')';
-        ARDUINO_DATA[strlength + 1] = '\0';
         if (ARDUINO_CHAR == 'T') {
-            mqtt.publish(PUBLISH, ARDUINO_DATA);
+            sscanf(ARDUINO_DATA, "%f,%f", &first, &second);
+            snprintf(SEND_BUFFER, SEND_BUFFER_SIZE, "{\"temperature\":%.2f,\"humidity\":%.2f}", first / 100, second / 100);
+            mqtt.publish(PUBLISH, SEND_BUFFER);
         } else if (ARDUINO_CHAR == 'S') {
-            mqtt.publish(PUBLISH_STATUS, ARDUINO_DATA, true);
+            SEND_BUFFER[0] = '[';
+            for (uint8_t i = 0; i < strlength; i++) {
+                SEND_BUFFER[i + 1] = ARDUINO_DATA[i];
+            }
+            SEND_BUFFER[strlength+1] = ']';
+            SEND_BUFFER[strlength+2] = '\0';
+            mqtt.publish(PUBLISH_STATUS, SEND_BUFFER, true);
         }
     }
 }
 
-bool isposnumber(const char* str) {
-    bool isnumber = true;
-    for (char* i = str; *i; i++)
-        if (!isdigit(*i)) {
-            isnumber = false;
-            break;
-        }
-    return isnumber;
+char separator[] = "(),";
+char* token;
+uint8_t number_of_tokens = 0;
+uint8_t store_values(char* string) {
+    number_of_tokens = 0;
+    token = strtok(string, separator);
+    while (token != NULL) {
+        PAYLOAD_VALUES[number_of_tokens++] = atoi(token);
+        token = strtok(NULL, separator);
+    }
+    return number_of_tokens;
 }
 
 void _msg_from_broker(char* topic, uint8_t* payload, unsigned int payload_length) {
-    strncpy(topic_buff, &topic[27], sizeof(topic_buff));
-    topic_buff[sizeof(topic_buff) - 1] = '\0';
+    memcpy(PAYLOAD_CPY, (char*)payload, payload_length);
+    if (payload_length < RECEIVE_BUFFER_SIZE)
+        PAYLOAD_CPY[payload_length] = '\0';
 
-    if (strcmp(topic_buff, "ALLOFF") == 0) {
+    if (payload_length < 6 || payload_length > 9) return;
+    if (strcasecmp(PAYLOAD_CPY, "ALLOFF") == 0) {
         Serial.println(F("ALLOFF"));
         return;
     }
 
-    uint8_t id = 0;
-    uint8_t comm = 0;
-    uint16_t time = 0;
-    uint8_t count = 0;
-
-    char* token = strtok(topic_buff, "/");
-    while (token != NULL) {
-        if (count == 0)
-            if (isposnumber(token) && strlen(token) <= 2)
-                id = atoi(token);
-            else
-                return;
-        else if (count == 1)
-            if (strcmp(token, "ON") == 0 || strcmp(token, "OFF") == 0)
-                comm = strcmp(token, "ON") == 0 ? 1 : 0;
-            else
-                return;
-        else if (count == 2)
-            if (comm)
-                if (isposnumber(token) && strlen(token) <= 4)
-                    time = atoi(token);
-                else
-                    return;
-        count++;
-        token = strtok(NULL, "/");
-    }
-
-    if (count <= 1 || id > 3 || comm && !time)
+    if (store_values(PAYLOAD_CPY) == 3) {
+        sprintf(SEND_BUFFER, "(%d,%d,%d)", PAYLOAD_VALUES[0], PAYLOAD_VALUES[1], PAYLOAD_VALUES[2]);
+        Serial.println(SEND_BUFFER);
         return;
-
-    sprintf(SEND_BUFFER, "(%d,%d)", id, comm. time);
-    printf(SEND_BUFFER);
+    }
 }
 
 void setup() {
@@ -134,7 +124,7 @@ void setup() {
     delay(10);
     WiFi.mode(WIFI_STA);
     WiFi.begin(SSID, PASS);
-    //WiFi.config(IP_ADDR, GATEWAY, SUBNET);
+    // WiFi.config(IP_ADDR, GATEWAY, SUBNET);
     while (WiFi.status() != WL_CONNECTED)
         delay(250);
 
@@ -143,10 +133,10 @@ void setup() {
 }
 void _reconnect() {
     while (!mqtt.connected()) {
-        //String clientId = "ESP8266Client-";
-        //clientId += String(random(0xffff), HEX);
-        // Attempt to connect
-        if (mqtt.connect(MQTT_ID)) {
+        // String clientId = "ESP8266Client-";
+        // clientId += String(random(0xffff), HEX);
+        //  Attempt to connect
+        if (mqtt.connect(MQTT_ID, MQTT_USER, MQTT_PASS)) {
             mqtt.publish("void", "balcony");
             mqtt.subscribe(SUBSCRIBE);
         } else {

@@ -1,47 +1,15 @@
-from redis.commands.json import JSON as REJSON_Client
-from fastapi import HTTPException
-from typing import Optional, Dict, Union
-from pydantic import BaseModel
-from main import REJSON_HOST
-from .. import MyRouterAPI
-import redis
-import os
-
-
-# TODO remove __ from sensors folder
+from misc import SERVICE_API, AIOSession
+from fastapi import HTTPException, APIRouter
+from pymodules.schemas.sensors_schemas import LocationSensorData, RelayStatus
 
 # Settings
 PREFIX = "/sensors"
 TAGS = ["sensors_api"]
 
 # To route the routings down the document.
-router = MyRouterAPI(prefix=PREFIX, tags=TAGS).router
+router = APIRouter(prefix=PREFIX, tags=TAGS)  # type: ignore
 
-# Redis json to be able to communicate between the daemon and backend.
-r_conn: REJSON_Client = redis.Redis(host=REJSON_HOST, port=6379, db=int(os.getenv("DBSENSOR","0"))).json()
-
-
-# Data models
-class Data(BaseModel):
-    # TODO use '|' asap pydantic is updated
-    __root__: Dict[str, Union[float, int, str]]
-
-
-class DeviceData(BaseModel):
-    time: str
-    new: bool
-    data: Data
-
-
-class SensorData(BaseModel):
-    __root__: Dict[str, Dict[str, DeviceData]]
-
-    def __iter__(self):
-        return iter(self.__root__)
-
-    def __getitem__(self, item):
-        return self.__root__[item]
-
+session = AIOSession()
 
 # Examples
 api_responses = {
@@ -57,23 +25,19 @@ api_responses = {
                             "data": {
                                 "temperature": 42,
                                 "humidity": 33.4,
-                            }
+                            },
                         },
                         "bikeroom": {
                             "time": "2021-12-31T00:13:37.12345",
                             "new": True,
                             "data": {
                                 "temperature": -42,
-                            }
+                            },
                         },
                         "kitchen": {
                             "time": "2021-12-31T11:13:37.12345",
-                                    "new": True,
-                                    "data": {
-                                        "temperature": -42,
-                                        "humidity": 99.9,
-                                        "airpressure": 1024.64
-                                    }
+                            "new": True,
+                            "data": {"temperature": -42, "humidity": 99.9, "airpressure": 1024.64},
                         },
                     },
                     "remote_sh": {
@@ -82,33 +46,35 @@ api_responses = {
                             "new": True,
                             "data": {
                                 "temperature": 42,
-                            }
+                            },
                         },
                         "hydrofor": {
                             "time": "2021-12-31T00:13:37.12345",
                             "new": True,
-                            "data": {
-                                "temperature": -42,
-                                "humidity": 99.9,
-                                "airpressure": 999.9
-                            }
-                        }
+                            "data": {"temperature": -42, "humidity": 99.9, "airpressure": 999.9},
+                        },
                     },
                 }
             }
-        }
+        },
     },
-    204: {}
+    204: {},
 }
 
 
 # Routing
-@ router.get("/api",
-             response_model=SensorData,
-             responses=api_responses,  # type:ignore
-             )
-async def api():
-    data: Optional[dict] = r_conn.get("sensors")
-    if data:
-        return data
-    raise HTTPException(status_code=204)
+@router.get("/", response_model=LocationSensorData, responses=api_responses)  # type:ignore
+async def get_sensor_data():
+    resp = await session().get(f"{SERVICE_API}/sensors")
+    if resp.status >= 300:
+        raise HTTPException(status_code=500)
+    return await resp.json()
+
+
+# Routing
+@router.get("/relay_status", response_model=RelayStatus)
+async def relay_status():
+    resp = await session().get(f"{SERVICE_API}/sensors/home/balcony/relay/status")
+    if resp.status >= 300:
+        raise HTTPException(status_code=500)
+    return await resp.json()

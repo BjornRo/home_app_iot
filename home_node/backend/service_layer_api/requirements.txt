@@ -1,5 +1,7 @@
+aiosqlite
 fastapi
-uvicorn
-bcrypt
+passlib[bcrypt]
 redis
+sqlalchemy
 ujson
+uvicorn
