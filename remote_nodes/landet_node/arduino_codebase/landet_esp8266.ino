@@ -8,7 +8,7 @@
 #define PORT 1883
 #define BROKER "mqtt.lan"
 #define MQTT_ID "hydrofor_unit"
-#define MQTT_USER ""
+#define MQTT_USER "hydrofor"
 #define MQTT_PASS ""
 #define PUBLISH "remote_sh/hydrofor/temphumidpress"
 

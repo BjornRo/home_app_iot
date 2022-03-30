@@ -10,7 +10,6 @@ from paho.mqtt.client import MQTTMessage, Client as MQTTClient
 from pymodules.authsockserver import AuthSocketServer, AuthSockClientHandler
 from pymodules.datamodels import MQTTPacket
 from pymodules.service_layer import blocklist as SL_BL
-
 from time import sleep
 
 
@@ -38,12 +37,8 @@ requests.models.complexjson = ujson  # type:ignore
 # Addresses
 MQTT_HOST = "mqtt.lan"
 
-# Socket info constants.
-MAX_PAYLOAD_SOCKET = 2048
-
 # TODO check ip
 # Socket setup
-S_PORT = 42668
 HOSTNAME = os.environ["HOSTNAME"]
 
 THIS_LOCATION = "home"
@@ -165,7 +160,7 @@ def get_arg_namespace() -> argparse.Namespace:
         dest="port",
         action="store",
         required=False,
-        default=S_PORT,
+        default=8888,
         type=int,
     )
     parser.add_argument(
