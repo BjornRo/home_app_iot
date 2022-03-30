@@ -6,11 +6,20 @@ trash/
 appdata/
 duckdns/
 __pycache__/
+node_modules/
 certbot/
-.env
 
 # Secret sauce #
 ################
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+config.json
+cfg.json
 config.ini
 data.json
 dat.json
@@ -59,6 +68,7 @@ private_encode.py
 
 
 # Ignore the ignore
+mosquitto.conf
 !requirements.txt
 !librejson.so
 !package.json
