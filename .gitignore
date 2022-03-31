@@ -24,6 +24,7 @@ config.ini
 data.json
 dat.json
 data.p
+cfg.h
 dat.p
 private_encode.py
 
