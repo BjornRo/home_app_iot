@@ -147,3 +147,19 @@ class Measurements(Base):
 
     device = relationship("Devices", back_populates="measurements")
     timestamp = relationship("TimeStamps", back_populates="measurements")
+
+
+"""
+Errors
+"""
+
+
+class Error(Base):
+    __tablename__ = "errors"
+
+    device_name = Column(Integer, ForeignKey("devices.name"), primary_key=True)
+    time = Column(DateTime, nullable=False, primary_key=True)
+    log_level = Column(String, nullable=False)
+    msg = Column(String, nullable=False)
+
+    timestamp = relationship("TimeStamps", back_populates="error")

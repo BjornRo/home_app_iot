@@ -10,17 +10,18 @@ from time import sleep
 # Addresses
 MQTT_HOST = "mqtt.lan"
 LOCATION = "home/"
-SERVICE_API = os.environ["SERVICE_API"] + "/sensors/" + LOCATION
+SENSORS_API = os.environ["SERVICE_API"] + "/sensors/" + LOCATION
+ERROR_API = os.environ["SERVICE_API"] + "/errors/api"
 
 # MQTT subscription
 RELAY_STATUS_PATH = "balcony/relay/status"
-SUB_TOPICS = ["bikeroom/temp", "balcony/temphumid", "kitchen/temphumidpress"]
+SUB_TOPICS = ["bikeroom/temp", "balcony/temphumid", "kitchen/temphumidpress", "errors/#"]
 
 # Replace json with ujson instead
 requests.models.complexjson = ujson  # type:ignore
 session = requests.Session()
 
-
+# TODO Add errors
 def on_connect(client, *_):
     for topic in SUB_TOPICS + [RELAY_STATUS_PATH]:
         client.subscribe(LOCATION + topic)
@@ -41,11 +42,11 @@ def on_message(_client, _userdata, msg: MQTTMessage) -> None:
                     "heater": data[2],
                     "unused": data[3],
                 }
-                session.post(SERVICE_API + topic, json=relays)
+                session.post(SENSORS_API + topic, json=relays)
             return None
 
         content = {"time": datetime.utcnow().isoformat(), "data": data}
-        session.post(SERVICE_API + topic.split("/")[0], json=content)
+        session.post(SENSORS_API + topic.split("/")[0], json=content)
         return None
 
 

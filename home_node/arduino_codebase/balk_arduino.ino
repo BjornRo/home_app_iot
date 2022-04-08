@@ -1,161 +1,270 @@
+#define ARDUINOJSON_USE_LONG_LONG 1
+#define __AVR_ATmega328P__
+#include <Arduino.h>
+#include <ArduinoJson.h>
+#include <WString.h>
 #include <avr/io.h>
+#include <math.h>
 #include <stdint.h>
+
 #include "DHT.h"
 
 // Safety variables
 #define MAXTEMP_SAFETY 30
-#define MAXTEMP_START 25
-#define MAX_TIMER 18000000  // 25 200 000
+#define MAXTEMP_START 26
+#define MAX_TIME 6 * 60
 
 // Time variables
 #define SCHEDULER_TICK_MS 5000
 #define MINUTES_TO_MS_FACTOR 60000
 #define TIMEOUT 5000
-uint32_t _scheduler_current = 0;
-uint32_t _timeout_recv = 0;
+// Relays with their state: active and timer.
+#define PIN_OFFSET 2  // Port D2 - For offsetting in the functions. 0-3 should be used.
+#define HEATER_PIN_INDEX 2
+#define RELAY_PINS 3
 
-//Relays with their state: active and timer.
-#define PIN_OFFSET 2  //Port D2 - For offsetting in the functions. 0-3 should be used.
-#define HEATER_PIN 2
-#define RELAY_PINS 4
-
-// By pin index 0-3(2-5): 0: Full light, 1: Low Light, 2: HEATER_PIN, 3: Unused
-
-//bool _active_pins[RELAY_PINS];
-uint32_t _timer_duration[RELAY_PINS];
-uint32_t _start_time[RELAY_PINS];
-
-//Temperature sensor
+// By pin index 0-3(2-5): 0: High light, 1: Low Light, 2: HEATER_PIN, 3: Unused
+// Temperature sensor
 DHT dht(7, DHT22);
 
-// Buffers
-#define RECV_BUFFER_SIZE 10
-#define SEND_BUFFER_SIZE 18
-int16_t _payload_values[3];
-char _recv_buffer[RECV_BUFFER_SIZE];
-char _send_buffer[SEND_BUFFER_SIZE];
-float temp = -60;
-float humid = -10;
+float temp, humid;
+#define BUFF_SIZE 128
+char msg_buffer[BUFF_SIZE], print_data_buffer[BUFF_SIZE];
+StaticJsonDocument<BUFF_SIZE> receive;
 
-void _scheduler() {
-    _read_dht();
-    _publish_temp();
-    _check_heater();
-    _check_relay_timers();
+char* const command_list[] = {"relay_status", "set_relay"};
+char* const pin_names[] = {"light_high", "light_low", "heater"};
+struct Pins {
+    uint8_t id;
+    char* name;
+    uint32_t timer_start;
+    uint32_t timer_length;
+    bool active;
+} pins[RELAY_PINS];
+
+void init_pins() {
+    // Set pinmode to OUT
+    DDRD |= ((1 << RELAY_PINS) - 1 << PIN_OFFSET);
+
+    for (uint8_t i = 0; i < RELAY_PINS; i++) {
+        struct Pins pin = {
+            .id = i + PIN_OFFSET,
+            .name = pin_names[i],
+            .timer_start = 0,
+            .timer_length = 0,
+            .active = false,
+        };
+        pins[i] = pin;
+    }
 }
 
-void _read_dht() {
+void scheduler() {
+    read_dht();
+    publish_temp();
+    check_heater();
+    check_relay_timers();
+}
+
+void read_dht() {
     float t = dht.readTemperature();
     float h = dht.readHumidity();
-    if (isnan(t) || isnan(h)) return;
+    if (isnan(t) || isnan(h)) {
+        snprintf(print_data_buffer, BUFF_SIZE, "\"DHT values is null: [h: %f, t: %f]\"", t, h);
+        print_error_to_esp("info");
+        return;
+    }
     temp = t;
     humid = h;
 }
-void _publish_temp() {
-    if (temp > 90 || temp < -50 || humid > 105 || humid < 0) return;
-    snprintf(_send_buffer, SEND_BUFFER_SIZE, "(T,(%d,%d))", (int16_t)(temp * 100), (int16_t)(humid * 100));
-    Serial.println(_send_buffer);
+
+void publish_temp() {
+    static char t[7], h[7];
+    dtostrf(temp, 3, 2, t);
+    dtostrf(humid, 3, 2, h);
+    if (temp < -50 || temp > 90 || humid < 0 || humid > 105) {
+        snprintf(print_data_buffer, BUFF_SIZE, "Bad DHT values: [t:%s, h: %s]", t, h);
+        print_error_to_esp("warning");
+        return;
+    }
+    snprintf(print_data_buffer, BUFF_SIZE, "{\"temperature\":%s,\"humidity\":%s}", t, h);
+    print_to_esp("sensor");
 }
 
-void _publish_status() {
-    snprintf(_send_buffer, SEND_BUFFER_SIZE, "(S,(%d,%d,%d,%d))",
-             PORTD & (1 << PIN_OFFSET) ? 1 : 0,
-             PORTD & (1 << PIN_OFFSET + 1) ? 1 : 0,
-             PORTD & (1 << PIN_OFFSET + 2) ? 1 : 0,
-             PORTD & (1 << PIN_OFFSET + 3) ? 1 : 0);
-    Serial.println(_send_buffer);
+void publish_relay_status() {
+    uint8_t i, j, len, pos;
+    pos = 0;
+    for (i = 0; i < RELAY_PINS; i++) {  // Leave space for null
+        const Pins& p = pins[i];
+        snprintf(msg_buffer, BUFF_SIZE, ",\"%s\":%s", p.name, p.active ? "true" : "false");
+        len = strlen(msg_buffer);
+        for (j = 0; j < len; j++) {
+            print_data_buffer[pos++] = msg_buffer[j];
+            if (pos >= BUFF_SIZE) {
+                strcpy(print_data_buffer, "Relay status msg too long");
+                print_error_to_esp("warning");
+                return;
+            }
+        }
+    }
+    print_data_buffer[0] = '{';  // Replace , with {
+    print_data_buffer[pos] = '}';
+    print_data_buffer[pos + 1] = '\0';
+    print_to_esp("relay");
 }
 
-void _check_heater() {
-    if (temp >= MAXTEMP_SAFETY && PORTD & (1 << PIN_OFFSET + HEATER_PIN)) {
-        turn_off_pin(HEATER_PIN);
-        _publish_status();
+void check_heater() {
+    Pins* hp = &pins[HEATER_PIN_INDEX];
+    if (hp->active && temp >= MAXTEMP_SAFETY) {
+        turn_off_pin_publish(hp);
     }
 }
-void _check_relay_timers() {
-    bool flag = false;
-    for (uint8_t i = 0; i < RELAY_PINS; i++)
-        if (PORTD & (1 << PIN_OFFSET + i))
-            if (millis() - _start_time[i] >= _timer_duration[i] || millis() - _start_time[i] >= MAX_TIMER) {
-                PORTD &= ~(1 << PIN_OFFSET + i);
-                flag = true;
-            }
-    if (flag)
-        _publish_status();
+
+void check_relay_timers() {
+    bool state_change = false;
+    for (uint8_t i = 0; i < RELAY_PINS; i++) {
+        Pins* p = &pins[i];
+        if (p->active && (millis() - p->timer_start >= p->timer_length)) {
+            turn_off_pin(p);
+            state_change = true;
+        }
+    }
+    if (state_change) publish_relay_status();
 }
 
 void turn_all_off_pins() {
-    //for (uint8_t i = 0; i < RELAY_PINS; i++)
-    //    turn_off_pin(i);
     PORTD &= ~((1 << RELAY_PINS) - 1 << PIN_OFFSET);
-    _publish_status();
-}
-void turn_off_pin(uint8_t pin_id) {
-    //digitalWrite(pin_id + PIN_OFFSET, LOW);
-    PORTD &= ~(1 << PIN_OFFSET + pin_id);
-    _publish_status();
-}
-void turn_on_pin(uint8_t pin_id, uint16_t minutes) {
-    if (minutes <= 0 || (pin_id == 2 && temp >= MAXTEMP_START)) return;
-    _timer_duration[pin_id] = (minutes <= 420) ? minutes * MINUTES_TO_MS_FACTOR : MAX_TIMER;
-    //digitalWrite(pin_id + PIN_OFFSET, HIGH);
-    PORTD |= (1 << PIN_OFFSET + pin_id);
-    _start_time[pin_id] = millis();
-    _publish_status();
+    for (uint8_t i = 0; i < RELAY_PINS; i++) {
+        pins[i].active = false;
+    }
+    publish_relay_status();
 }
 
-void _recv_esp() {
-    static uint8_t input_pos = 0;
-    while (Serial.available() > 0) {
-        char inByte = Serial.read();
-        switch (inByte) {
-            case '\n':
-                _recv_buffer[input_pos] = 0;
-                _string_handler();
-                input_pos = 0;
-                break;
-            case '\r':
-                break;
-            default:
-                if (input_pos < (RECV_BUFFER_SIZE - 1))
-                    _recv_buffer[input_pos] = inByte;
-                input_pos = input_pos + 1;
-                break;
+void turn_off_pin(Pins* pin) {
+    PORTD &= ~(1 << pin->id);
+    pin->active = false;
+}
+
+void turn_off_pin_publish(Pins* pin) {
+    turn_off_pin(pin);
+    publish_relay_status();
+}
+
+void turn_on_pin_publish(Pins* pin, uint16_t minutes) {
+    turn_on_pin(pin, minutes);
+    publish_relay_status();
+}
+
+void turn_on_pin(Pins* pin, uint16_t minutes) {
+    if (minutes <= 0 || (pin->id - PIN_OFFSET == HEATER_PIN_INDEX && temp > MAXTEMP_START)) return;
+    PORTD |= (1 << pin->id);
+    pin->active = true;
+    pin->timer_start = millis();
+    pin->timer_length = minutes > MAX_TIME ? MAX_TIME * MINUTES_TO_MS_FACTOR : minutes * MINUTES_TO_MS_FACTOR;
+}
+
+void recv_esp() {
+    static uint8_t pos = 0;
+    static char buffer[BUFF_SIZE];
+    while (Serial.available()) {
+        const char c = Serial.read();
+        if (c == '\n') {
+            buffer[pos] = '\0';
+            pos = 0;
+
+            DeserializationError err = deserializeJson(receive, buffer);
+            if (err) {
+                strcpy(print_data_buffer, "Error in data sent to arduino: ");
+                strcat(print_data_buffer, err.c_str());
+                print_error_to_esp("warning");
+                return;
+            }
+            command_handler();
+        } else if (pos < BUFF_SIZE - 1) {
+            buffer[pos++] = c;
         }
     }
 }
 
-void _string_handler() {
-    if (strcmp(_recv_buffer, "ALLOFF") == 0) return turn_all_off_pins();
-    if (strcmp(_recv_buffer, "STATUS") == 0) return _publish_status();
-    if (sscanf(_recv_buffer, "(%d,%d,%d)", &_payload_values[0], &_payload_values[1], &_payload_values[2]) == 3) {
-        if (_payload_values[0] >= 0 && _payload_values[0] <= 3) {
-            if (_payload_values[1] == 0) {
-                turn_off_pin(_payload_values[0]);
-                return;
+void command_handler() {
+    char* cmd = receive["cmd"];
+    if (!(strcasecmp(cmd, command_list[0]))) return publish_relay_status();
+
+    uint8_t i;
+    JsonVariant data = receive["data"];
+
+    if (!strcasecmp(cmd, command_list[1])) {
+        if (data.is<const char*>()) {
+            if (!strcasecmp(data, "all_off")) {
+                turn_all_off_pins();
+            } else {
+                strcpy(print_data_buffer, "Unknown set_relay data, allowed values: [all_off, {\"key_name\":0-n minutes(0 turns off)}]");
+                print_error_to_esp("warning");
             }
-            if (_payload_values[1] == 1 && _payload_values[2] > 0 && _payload_values[2] <= 420) {
-                turn_on_pin(_payload_values[0], _payload_values[2]);
-                return;
+            return;
+        } else if (data.is<JsonObject>()) {
+            bool missing_keys = true;
+            for (JsonPair kv : (JsonObject)data) {
+                for (i = 0; i < RELAY_PINS; i++) {
+                    Pins* p = &pins[i];
+                    if (!strcasecmp(kv.key().c_str(), p->name)) {
+                        missing_keys = false;
+                        uint32_t val = kv.value().as<uint32_t>();
+                        if (val) {
+                            turn_on_pin(p, val);
+                        } else {
+                            turn_off_pin(p);
+                        }
+                    }
+                }
             }
+            if (missing_keys) {
+                strcpy(print_data_buffer, "Missing keys for relays, valid: [");
+                for (i = 0; i < RELAY_PINS; i++) {
+                    strcat(print_data_buffer, pin_names[i]);
+                    strcat(print_data_buffer, ", ");
+                }
+                i = strlen(print_data_buffer);
+                print_data_buffer[i - 1] = ']';
+                print_data_buffer[i] = '\0';
+                print_error_to_esp("warning");
+            } else {
+                publish_relay_status();
+            }
+            return;
         }
     }
+    strcpy(print_data_buffer, "Unkwn cmd sent, valid cmd: [set_relay[data:{key:0-n}], relay_status]");
+    print_error_to_esp("warning");
+}
+
+void print_to_esp(char* cmd) {
+    snprintf(msg_buffer, BUFF_SIZE, "{\"cmd\":\"%s\",\"data\":%s}", cmd, print_data_buffer);
+    Serial.println(msg_buffer);
+}
+
+void print_error_to_esp(char* loglevel) {
+    snprintf(
+        msg_buffer,
+        BUFF_SIZE,
+        "{\"cmd\":\"error\",\"data\":{\"detail\":\"%s\",\"log_level\":\"%s\"}",
+        print_data_buffer,
+        loglevel);
+    Serial.println(msg_buffer);
 }
 
 void setup() {
     ADCSRA = 0;
     Serial.begin(115200);
     dht.begin();
-    //for (uint8_t i = 0; i < RELAY_PINS; i++)
-    //    pinMode(i + PIN_OFFSET, OUTPUT);
-    DDRD |= ((1 << RELAY_PINS) - 1 << PIN_OFFSET);
+    init_pins();
 }
 
 void loop() {
-    _recv_esp();
-    //Tick-rate counter.
-    if (millis() - _scheduler_current >= SCHEDULER_TICK_MS) {
-        _scheduler_current = millis();
-        _scheduler();
+    static uint32_t last = 0;
+    recv_esp();
+    // Tick-rate counter.
+    if (millis() - last >= SCHEDULER_TICK_MS) {
+        last = millis();
+        scheduler();
     }
 }

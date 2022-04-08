@@ -49,8 +49,6 @@ MAX_PAYLOAD_SIZE = 2048
 SSLPATH = f"/etc/letsencrypt/live/{HOSTNAME}/"
 
 # For storing sockets for annocing new data.
-socket_dict: dict[str, ssl.SSLSocket] = {}
-
 retained_msg: dict[str, MQTTPacket] = {}
 
 

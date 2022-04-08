@@ -74,24 +74,24 @@ services:
     restart: unless-stopped
     command: python3 main.py --debug
 
-  mqtt_net_bridge_srv:
-    container_name: mqtt_net_bridge_srv
-    build:
-      context: ./mqtt_net_bridge_srv
-      dockerfile: mqtt_net_bridge_srv.dockerfile
-    env_file: .env
-    volumes:
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
-      - ./appdata/certbot/letsencrypt:/etc/letsencrypt
-      - ./pymodules:/app/pymodules
-      - ./mqtt_net_bridge_srv:/app
-    ports:
-      - 42668:42668
-    depends_on:
-      - service_layer_api
-    restart: unless-stopped
-    command: python main.py --port 42668 --debug
+  # mqtt_net_bridge_srv:
+  #   container_name: mqtt_net_bridge_srv
+  #   build:
+  #     context: ./mqtt_net_bridge_srv
+  #     dockerfile: mqtt_net_bridge_srv.dockerfile
+  #   env_file: .env
+  #   volumes:
+  #     - /etc/timezone:/etc/timezone:ro
+  #     - /etc/localtime:/etc/localtime:ro
+  #     - ./appdata/certbot/letsencrypt:/etc/letsencrypt
+  #     - ./pymodules:/app/pymodules
+  #     - ./mqtt_net_bridge_srv:/app
+  #   ports:
+  #     - 42668:42668
+  #   depends_on:
+  #     - service_layer_api
+  #   restart: unless-stopped
+  #   command: python main.py --port 42668 --debug
 
   # sensor_remote_fetch:
   #   container_name: sensor_remote_fetch
@@ -132,27 +132,27 @@ services:
       - rejson
     restart: unless-stopped
 
-  public_api:
-    container_name: public_api
-    build:
-      context: ./public_api
-      dockerfile: public_api.dockerfile
-    env_file: .env
-    #command: uvicorn main:app --reload --host 0.0.0.0 --port 8000 --log-level debug
-    command: python3 main.py --reload --port 8443 --verbose
-    <<: *redis-db-env
-    volumes:
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
-      - ./pymodules:/app/pymodules
-      - ./appdata/certbot/letsencrypt:/etc/letsencrypt
-      - ./appdata/db:/db
-      - ./public_api:/app
-    ports:
-      - 8443:8443
-    depends_on:
-      - service_layer_api
-    restart: unless-stopped
+  # public_api:
+  #   container_name: public_api
+  #   build:
+  #     context: ./public_api
+  #     dockerfile: public_api.dockerfile
+  #   env_file: .env
+  #   #command: uvicorn main:app --reload --host 0.0.0.0 --port 8000 --log-level debug
+  #   command: python3 main.py --reload --port 8443 --verbose
+  #   <<: *redis-db-env
+  #   volumes:
+  #     - /etc/timezone:/etc/timezone:ro
+  #     - /etc/localtime:/etc/localtime:ro
+  #     - ./pymodules:/app/pymodules
+  #     - ./appdata/certbot/letsencrypt:/etc/letsencrypt
+  #     - ./appdata/db:/db
+  #     - ./public_api:/app
+  #   ports:
+  #     - 8443:8443
+  #   depends_on:
+  #     - service_layer_api
+  #   restart: unless-stopped
 
   # ddns:
   #   container_name: ddns

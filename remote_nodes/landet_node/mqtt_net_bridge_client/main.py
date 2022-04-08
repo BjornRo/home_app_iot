@@ -90,7 +90,7 @@ async def mqtt_sock_publish(mqtt: Client, home: AASC.AsyncAuthSockClient):
         packet = await home.recv()
         if packet is None:
             return
-        payload = m.MQTTPacket.parse_obj(ujson.loads(packet))
+        payload = m.MQTTPacket.parse_obj(packet)
         if home.usrname.lower() != payload.topic.split("/")[0].lower():
             asyncio.ensure_future(
                 mqtt.publish(payload.topic, payload=ujson.dumps(payload.payload), retain=payload.retain)

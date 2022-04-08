@@ -52,10 +52,10 @@ class AuthSocketServer(threading.Thread):
         hostname: str,
         sslpath: str,
         package_handler: Callable,
-        on_connect: Callable =lambda *args, **kwargs : None,
-        validate_user : Callable=lambda *args, **kwargs : True,
-        blocklist_checker : Callable=lambda *args, **kwargs : False, # is banned.
-        on_block_ip: Callable=lambda *args, **kwargs : None,
+        on_connect: Callable = lambda *args, **kwargs: None,
+        validate_user: Callable = lambda *args, **kwargs: True,
+        blocklist_checker: Callable = lambda *args, **kwargs: False,  # is banned.
+        on_block_ip: Callable = lambda *args, **kwargs: None,
         header_len=2,
         daemon=True,
         thread_workers=8,
@@ -132,7 +132,7 @@ class AuthSocketServer(threading.Thread):
                         with suppress(Exception):
                             client.sendall((2).to_bytes(self._header_len, "big") + b"KO")
                 else:
-                    #self._on_block_ip(session, ip_addr)
+                    # self._on_block_ip(session, ip_addr)
                     logging.warning("Client is banned: " + ip_addr)
                 with suppress(Exception):
                     client.close()
@@ -143,8 +143,8 @@ class AuthSocketServer(threading.Thread):
                 logging.info("Client SSL exception: " + str(e))
 
     def close_server(self):
-        self._start_close_lock.acquire()  # If server is starting. Pause this
-        self._start_close_lock.release()
+        with self._start_close_lock:  # If server is starting. Pause this
+            pass
 
         # Server has already been called closing or not started.
         if self._closing or self._srvsock is None:
@@ -222,7 +222,7 @@ class AuthSockClientHandler(threading.Thread):
         self.client = client
         self.daemon = daemon
         self.ip = str(client.getpeername()[0])
-        self.unused_dict = {} # For whatever use one want. This will get deleted on disconnect.
+        self.unused_dict = {}  # For whatever use one want. This will get deleted on disconnect.
         self._passwd = ""  # Do not store valid login passwords. Just for logging invalid ones.
         self._sockserv = sockserv
         self._kwargs = kwargs

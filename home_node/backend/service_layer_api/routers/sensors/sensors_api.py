@@ -28,6 +28,7 @@ async def get_sensor_data():
         raise HTTPException(status_code=404, detail="Sensor data is missing")
     return data
 
+
 # TODO Remove
 @router.get("/clear_redis")
 async def psd():
@@ -85,7 +86,6 @@ async def post_data(
     else:
         logging.warning(f"Old data sent: {device}, {time.isoformat()}")
     return JSONResponse(status_code=422, content="Invalid data")
-
 
 
 @router.get("/home/balcony/relay/status", response_model=RelayStatus)

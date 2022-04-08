@@ -7,7 +7,7 @@ import random
 import socket
 import time
 import ubinascii  # type:ignore
-import ujson as json
+import ujson as json # type:ignore
 from machine import Pin  # type:ignore
 from umqtt.simple import MQTTClient  # type:ignore
 

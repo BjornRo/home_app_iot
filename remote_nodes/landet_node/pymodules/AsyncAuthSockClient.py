@@ -1,11 +1,12 @@
-from abc import ABC
 import asyncio
 import logging
 import socket
 import ssl
-import ujson
+import ujson as json
 import zlib
+from abc import ABC
 from contextlib import suppress
+from typing import Any
 
 
 # TODO check if daemon is the correct name for task running in the background.
@@ -31,7 +32,7 @@ class AsyncAuthSockClient:
         self.max_msg_size = max_msg_size
         self.daemon = daemon
         if daemon:
-            self._buffer: asyncio.Queue[bytes | None] = asyncio.Queue(daemon_msg_buffer_size)
+            self._buffer: asyncio.Queue[str | dict | None] = asyncio.Queue(daemon_msg_buffer_size)
         self.daemon_blocking_read = daemon_blocking_read
         self.auto_reconnect = auto_reconnect
         self.log_ip = f"{ip}:{port}"
@@ -42,10 +43,10 @@ class AsyncAuthSockClient:
         # self.ssl = ssl.SSLContext(ssl.PROTOCOL_TLS)
         self.ssl = ssl.create_default_context()
 
-    async def send(self, payload: bytes | dict | str | list) -> bool:
+    async def send(self, payload: Any) -> bool:
         return await self.conn_state.send(payload)
 
-    async def recv(self) -> bytes | None:
+    async def recv(self) -> str | dict | None:
         if self.daemon:
             if self.daemon_blocking_read:
                 return await self._buffer.get()
@@ -90,29 +91,26 @@ class AASCStateABC(ABC):
         self.log_ip = f"{self.client_handler.ip}:{self.client_handler.port}"
         self.log_full = f"{self.log_ip} | Usr: {self.client_handler.usrname}"
 
-    async def send(self, payload: bytes | dict | str | list) -> bool:
+    async def send(self, payload: Any) -> bool:
         if self.writer is None:
             raise RuntimeError("Client isn't connected.")
 
-        if isinstance(payload, dict | list):
-            payload = ujson.dumps(payload).encode()
-        elif isinstance(payload, str):
-            payload = payload.encode()
-        comp_data = zlib.compress(payload, level=9)
+        if isinstance(payload, bytes):
+            payload = payload.decode()
+        comp_data = zlib.compress(json.dumps(payload).encode())
 
         self.writer.write(len(comp_data).to_bytes(self.client_handler.header_len, "big") + comp_data)
         await self.writer.drain()
         return True
 
-    async def recv(self) -> bytes | None:
+    async def recv(self) -> str | dict | None:
         if self.reader is None:
             raise RuntimeError("Client isn't connected.")
 
         # Will throw asyncio.exceptions.IncompleteReadError if disconnect.
         header_bytes = await self.reader.readexactly(1)
-        delta = self.client_handler.header_len - 1
-        if delta > 0:
-            header_bytes += await asyncio.wait_for(self.reader.readexactly(delta), timeout=2)
+        if _rest := self.client_handler.header_len - 1:
+            header_bytes += await asyncio.wait_for(self.reader.readexactly(_rest), timeout=2)
 
         # header_byte_len, to get content length.
         header_len = int.from_bytes(header_bytes, "big")
@@ -125,7 +123,7 @@ class AASCStateABC(ABC):
 
         with suppress(zlib.error):
             payload = zlib.decompress(payload)
-        return payload
+        return json.loads(payload)
 
     async def connect(self) -> bool:
         return False
@@ -196,7 +194,7 @@ class AASCStateConnecting(AASCStateABC):
             except ssl.SSLError:
                 logging.info("Closed before SSL cound finish: " + self.log_ip)
             except asyncio.IncompleteReadError:
-                    logging.info("Found EOF before expected: " + self.log_ip)
+                logging.info("Found EOF before expected: " + self.log_ip)
             except asyncio.TimeoutError:
                 logging.info("Connection timeout: " + self.log_ip)
             except ConnectionRefusedError:
@@ -222,7 +220,7 @@ class AASCStateConnecting(AASCStateABC):
 
             # Otherwise reconnect.
             logging.info("Retrying to connect...")
-            await asyncio.sleep(60)
+            await asyncio.sleep(4)
 
     async def close(self):
         if self._close:
@@ -248,7 +246,7 @@ class AASCStateConnecting(AASCStateABC):
     async def _login(self) -> bool:
         if self.writer is not None:
             if await super().send(self.client_handler.login_credentials):
-                return await super().recv() == b"OK"
+                return await super().recv() == "OK"
         return False
 
 
@@ -269,7 +267,7 @@ class AASCStateConnected(AASCStateABC):
         if client_handler.daemon:
             self._daemon_task = asyncio.create_task(self._daemon())
 
-    async def recv(self) -> bytes | None:
+    async def recv(self) -> str | dict | None:
         if self._closing:
             return None
 
