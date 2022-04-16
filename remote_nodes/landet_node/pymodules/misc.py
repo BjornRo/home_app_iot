@@ -9,27 +9,11 @@ import tarfile
 import ujson
 import zlib
 from aiofiles import open as async_open
-from aiotinydb import AIOTinyDB
 from contextlib import suppress
 from io import BytesIO
 
-# DB
-DB_FILE = os.environ["NAME"] + ".json"
-DB_PATH = "/db/"
-DB_COLLECTION = "data"
 
-
-async def insert_db(data: dict, filepath=DB_PATH + DB_FILE, table_name=DB_COLLECTION) -> None:
-    async with AIOTinyDB(filepath, default_table=table_name) as db:
-        db.insert(data)
-
-
-async def get_db(filepath=DB_PATH + DB_FILE, table_name=DB_COLLECTION) -> list:
-    async with AIOTinyDB(filepath) as db:
-        return db.table(table_name).all()
-
-
-async def get_filebytes(filename: str, path=DB_PATH) -> bytes | None:
+async def get_filebytes(filename: str, path: str) -> bytes | None:
     filepath = path + filename
     if not os.path.isfile(filepath):
         return None

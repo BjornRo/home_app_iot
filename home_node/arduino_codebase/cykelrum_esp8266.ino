@@ -5,10 +5,10 @@
 #include <OneWire.h>
 #include <PubSubClient.h>
 #include <WiFiClientSecureBearSSL.h>
-#include <cfg.h>
+#include <my_cfg.h>
 
-#define SSID _ssid
-#define PASS _pass
+#define SSID _wssid
+#define PASS _wpass
 #define PORT _port
 #define BROKER _broker
 #define MQTT_ID _mqtt_id
@@ -31,18 +31,11 @@ BearSSL::WiFiClientSecure wifi;
 PubSubClient mqtt(BROKER, PORT, wifi);
 
 void _reconnect() {
-    uint16_t attempts = 0;
     while (!mqtt.connected()) {
-        if (!attempts) {
-            getTime();
-        }
+        getTime();
         if (mqtt.connect(MQTT_ID, MQTT_USER, MQTT_PASS)) {
             mqtt.publish("void", MQTT_USER);
         } else {
-            attempts++;
-            if (attempts >= 17280) {
-                attempts = 0;
-            }
             delay(5000);
         }
     }
@@ -65,7 +58,7 @@ void read_and_publish_temp() {
     sensors.requestTemperatures();
     static float temp = sensors.getTempCByIndex(0);
     if (-60 <= temp && temp <= 80) {
-        snprintf(send_buffer, SEND_BUFFER_SIZE, "{\"temperature\":%f}", temp);
+        snprintf(send_buffer, SEND_BUFFER_SIZE, "{\"temperature\":%.2f}", temp);
         mqtt.publish(PUBLISH_DATA, send_buffer);
     }
 }

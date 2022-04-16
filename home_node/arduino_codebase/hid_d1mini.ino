@@ -6,20 +6,19 @@
 #include <PubSubClient.h>
 #include <WiFiClientSecureBearSSL.h>
 #include <Wire.h>
-#include <cfg.h>
+#include <my_cfg.h>
 #include <inttypes.h>
 
-#define SSID _ssid
-#define PASS _pass
+#define SSID _wssid
+#define PASS _wpass
 #define PORT _port
 #define BROKER _broker
 #define MQTT_ID _mqtt_id
 #define MQTT_USER _name
 #define MQTT_PASS _pass
 #define PUBLISH_COMM "home/balcony/relay"
-const char* SUB_BALC = "home/balcony/sensor/data";
-const char* SUB_BIKE = "home/bikeroom/sensor/data";
-const char* SUBS[] = {SUB_BALC, SUB_BIKE};
+#define SUB_BALC "home/balcony/sensor/data"
+#define SUB_BIKE "home/bikeroom/sensor/data"
 
 // Time-related variables
 #define TIMEOUT 5000
@@ -35,17 +34,17 @@ unsigned long scheduler_timer, last_poll_time, lcd_timer, saved_time;
 // One click on, double off
 //  LCD D1 D2
 #define NBUTTONS 4
-#define all_off_button D3
-#define hi_light_button D5
-#define lo_light_button D6
-#define heater_button D7
+#define all_off_button 0     // D3
+#define light_hi_button 14   // D5
+#define light_low_button 12  // D6
+#define heater_button 13     // D7
 #define LCD_ON_DISTANCE_CM 20
-const uint8_t pin_list[] = {all_off_button, hi_light_button, lo_light_button, heater_button};
-const char* pin_command[] = {"\"all_off\"", "{\"light_high\":%d}", "{\"light_low\":%d}", "{\"heater\":%d}"};
+const uint8_t pin_list[] = {all_off_button, light_hi_button, light_low_button, heater_button};
+char* const pin_command[] = {"\"all_off\"", "{\"light_high\":-1}", "{\"light_low\":-1}", "{\"heater\":-1}"};
 
 // Ultrasonic
-#define trig_pin D8
-#define echo_pin D0
+#define trig_pin 15  // D8
+#define echo_pin 16  // D0
 
 // WIFI, MQTT
 BearSSL::WiFiClientSecure wifi;
@@ -69,7 +68,7 @@ char send_buffer[SEND_RECV_BUFFER_SIZE];
 // Read payload
 #define MAX_KEYS 5
 float payload_values[MAX_KEYS];
-char* key[MAX_KEYS];
+char* keys[MAX_KEYS];
 char payload_cpy[SEND_RECV_BUFFER_SIZE];
 char separator[] = "[]),";
 char* token;
@@ -102,9 +101,12 @@ void mqtt_publish_data() {
     if (temp_f < -50 || temp_f > 60) return;
     if (humid_f < 0 || humid_f > 105) return;
     if (air_pressure_f < 300 || air_pressure_f > 1300) return;
-    snprintf(send_buffer, SEND_RECV_BUFFER_SIZE,
+    snprintf(send_buffer,
+             SEND_RECV_BUFFER_SIZE,
              "{\"temperature\":%.2f,\"humidity\":%.2f,\"airpressure\":%.2f}",
-             temp_f, humid_f, air_pressure_f);
+             temp_f,
+             humid_f,
+             air_pressure_f);
     mqtt.publish(PUBLISH_DATA, send_buffer);
 }
 
@@ -161,7 +163,7 @@ uint8_t read_simple_json(char* payload, float payload_vals[]) {
     // char json[80] = "{\"temperature\":4459,\"humidity\":100.00,\"airpressure\":1000.99}";
     char* contents = strtok(payload, "{\"");
     while (contents != NULL) {
-        key[i] = contents;
+        keys[i] = contents;
         contents = strtok(NULL, "\":,}");
         if (contents == NULL) {
             return 0;
@@ -200,83 +202,31 @@ void msg_from_broker(char* topic, uint8_t* payload, unsigned int payload_len) {
     }
 }
 
-// Function to read button and Debounce it. Async version.
-uint8_t button_counter[4];
-uint8_t button_pressed;  // 0b#0(0000) #1(0000), #0 = "Active", #1 = "If buttons been pressed"
+// Function to read button and "Debounce".
+#define BTN_DEBOUNCE_NUMBER 4
 void checkButtons() {
+    static uint32_t button_timeout[4];
+    static uint8_t button_counter[4];
     for (uint8_t i = 0; i < NBUTTONS; i++) {
         if (digitalRead(pin_list[i]) == 0) {
-            // Prevent overflow.
-            if (button_counter[i] < UINT8_MAX)
-                button_counter[i]++;
+            if (millis() - button_timeout[i] > BUTTON_TIMEOUT && button_counter[i] < BTN_DEBOUNCE_NUMBER) {
+                if (++button_counter[i] == BTN_DEBOUNCE_NUMBER) {
+                    mqtt_publish_command(PUBLISH_COMM, i);
+                    button_timeout[i] = millis();
+                }
+            }
         } else {
             button_counter[i] = 0;
         }
-        // After 10 loops of button stabilizing, set button to true. "Sensitivity".
-        if (button_counter[i] == 10) {
-            button_pressed |= (1 << i);
-        }
     }
 }
 
-void mqtt_publish_command(char* topic, char* pin_index, uint16_t value) {
+void mqtt_publish_command(char* topic, uint8_t pin_index) {
     static char data[25];
-    snprintf(data, 25, pin_command[pin_index], value);
     strcpy(send_buffer, "{\"cmd\":\"set_relay\",\"data\":");
-    strcat(send_buffer, data);
-    strcat(send_buffer, '}');
+    strcat(send_buffer, pin_command[pin_index]);
+    strcat(send_buffer, "}");
     mqtt.publish(topic, send_buffer);
-}
-
-// Works both as timeout and check for double click.
-unsigned long button_start_click[4];
-void check_buttons_then_decide() {
-    checkButtons();
-    for (uint8_t i = 0; i < NBUTTONS; i++) {
-        // Check if button is pressed or active. -- old (1 << i) | (1 << i + NBUTTONS))
-        if (button_pressed & (0b10001 << i)) {
-            // IF button is active, let it pass | Button click "cooldown". Using binary explicit is more verbose.
-            // 1 << i + NBUTTONS == 0b10000 << i, in this case. Less cycles I suppose?
-            if (button_pressed & (0b10000 << i) || millis() - button_start_click[i] >= BUTTON_TIMEOUT) {
-                // All off, no double click/delay. Skip the entire algorithm.
-                uint16_t value = 0;
-                if (i) {
-                    // If button isn't active, then set it to 1, set pressed to 0 and store time.
-                    // Continue loop since we want to recheck if button is pressed again or held.
-                    if (!(button_pressed & (0b10000 << i))) {
-                        button_start_click[i] = millis();
-                        // Set active bit to 1. Set pressed bit to 0
-                        button_pressed = (button_pressed | (0b10000 << i)) & ~(1 << i);
-                        continue;
-                    }
-                    // From this point on, button active has to be 1.
-                    // If button is pressed again, we know that it has to be a double click.
-                    if (!(button_pressed & (1 << i))) {
-                        if (millis() - button_start_click[i] >= BUTTON_DECISION_INTERVAL) {
-                            // If timer for the button has passed, then we check the state of the pin.
-                            // If active = long press. Otherwise it has to be a single click.
-                            if (digitalRead(pin_list[i]) != 0) {
-                                if (i == 1) {
-                                    value = 10;
-                                } else {
-                                    value = 420;
-                                }
-                            }
-                            // Last else to just keep continuing the loop until a decision is made.
-                        } else {
-                            continue;
-                        }
-                    }
-                }
-                mqtt_publish_command(PUBLISH_COMM, i, value);
-                // If a decision has been made, then timeout.
-                button_start_click[i] = millis();
-            }
-            // Buttons will only reach this if button timeout or decision has been made.
-            // Set both i flags to 0.
-            button_pressed &= ~(0b10001 << i);  //(1 << i) | (1 << i + NBUTTONS)
-        }
-    }
 }
 
 bool ultrasonic_polling() {
@@ -292,8 +242,9 @@ void lcd_backlight(bool ultrasound) {
     if (ultrasound) {
         lcd_timer = millis();
         lcd.backlight();
-    } else if (millis() - lcd_timer >= LCD_TIMEOUT)
+    } else if (millis() - lcd_timer >= LCD_TIMEOUT) {
         lcd.noBacklight();
+    }
 }
 
 void setup() {
@@ -327,8 +278,9 @@ void setup() {
     WiFi.mode(WIFI_STA);
     WiFi.begin(SSID, PASS);
 
-    while (WiFi.status() != WL_CONNECTED)
+    while (WiFi.status() != WL_CONNECTED) {
         delay(250);
+    }
 
     wifi.setTrustAnchors(&cert);
     wifi.setClientRSACert(&client_crt, &key);
@@ -340,18 +292,13 @@ void setup() {
 }
 
 void _reconnect() {
-    uint16_t attempts = 0;
     while (!mqtt.connected()) {
-        if (!attempts) {
-            getTime();
-        }
+        getTime();
         if (mqtt.connect(MQTT_ID, MQTT_USER, MQTT_PASS)) {
+            mqtt.subscribe(SUB_BALC, 1);
+            mqtt.subscribe(SUB_BIKE, 1);
             mqtt.publish("void", MQTT_USER);
         } else {
-            attempts++;
-            if (attempts >= 17280) {
-                attempts = 0;
-            }
             delay(5000);
         }
     }
@@ -361,7 +308,7 @@ void loop() {
     _reconnect();
 
     mqtt.loop();
-    check_buttons_then_decide();
+    checkButtons();
 
     if (millis() - last_poll_time >= POLLRATE) {
         last_poll_time = millis();

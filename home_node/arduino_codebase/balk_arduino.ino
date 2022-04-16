@@ -2,10 +2,7 @@
 #define __AVR_ATmega328P__
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <WString.h>
-#include <avr/io.h>
-#include <math.h>
-#include <stdint.h>
+//#include <avr/io.h>
 
 #include "DHT.h"
 
@@ -19,18 +16,22 @@
 #define MINUTES_TO_MS_FACTOR 60000
 #define TIMEOUT 5000
 // Relays with their state: active and timer.
-#define PIN_OFFSET 2  // Port D2 - For offsetting in the functions. 0-3 should be used.
-#define HEATER_PIN_INDEX 2
+#define PIN_OFFSET 2        // Port D3 - For offsetting in the functions. 0-3 should be used.
+#define HEATER_PIN_INDEX 2  // Offsetted pin index. = 5
 #define RELAY_PINS 3
+
+#define HIGH_LIGHT_BUTTON_PIN 8  // Uno has interrupts on 2,3. Used async-polling on instead due to 'volatile'.
+#define DHT22_PIN 7
+#define BUTTON_TIMEOUT 1000
 
 // By pin index 0-3(2-5): 0: High light, 1: Low Light, 2: HEATER_PIN, 3: Unused
 // Temperature sensor
-DHT dht(7, DHT22);
+DHT dht(DHT22_PIN, DHT22);
 
+#define BUFF_SIZE 144
 float temp, humid;
-#define BUFF_SIZE 128
 char msg_buffer[BUFF_SIZE], print_data_buffer[BUFF_SIZE];
-StaticJsonDocument<BUFF_SIZE> receive;
+StaticJsonDocument<96> receive;
 
 char* const command_list[] = {"relay_status", "set_relay"};
 char* const pin_names[] = {"light_high", "light_low", "heater"};
@@ -55,6 +56,29 @@ void init_pins() {
             .active = false,
         };
         pins[i] = pin;
+    }
+    pinMode(HIGH_LIGHT_BUTTON_PIN, INPUT_PULLUP);
+}
+
+#define BTN_DEBOUNCE_NUMBER 4
+void check_btn() {
+    static uint8_t btn_counter = 0;
+    static uint32_t btn_timeout = 0;
+
+    if (digitalRead(HIGH_LIGHT_BUTTON_PIN) == 0) {
+        if (millis() - btn_timeout > BUTTON_TIMEOUT && btn_counter < BTN_DEBOUNCE_NUMBER) {
+            btn_counter++;
+            if (btn_counter == BTN_DEBOUNCE_NUMBER) {
+                if (pins[0].active) {
+                    turn_off_pin_publish(&pins[0]);
+                } else {
+                    turn_on_pin_publish(&pins[0], 10);
+                }
+                btn_timeout = millis();
+            }
+        }
+    } else {
+        btn_counter = 0;
     }
 }
 
@@ -106,7 +130,7 @@ void publish_relay_status() {
             }
         }
     }
-    print_data_buffer[0] = '{';  // Replace , with {
+    print_data_buffer[0] = '{';  // Replace ',' with {
     print_data_buffer[pos] = '}';
     print_data_buffer[pos + 1] = '\0';
     print_to_esp("relay");
@@ -128,7 +152,9 @@ void check_relay_timers() {
             state_change = true;
         }
     }
-    if (state_change) publish_relay_status();
+    if (state_change) {
+        publish_relay_status();
+    }
 }
 
 void turn_all_off_pins() {
@@ -149,17 +175,19 @@ void turn_off_pin_publish(Pins* pin) {
     publish_relay_status();
 }
 
-void turn_on_pin_publish(Pins* pin, uint16_t minutes) {
-    turn_on_pin(pin, minutes);
-    publish_relay_status();
-}
-
 void turn_on_pin(Pins* pin, uint16_t minutes) {
-    if (minutes <= 0 || (pin->id - PIN_OFFSET == HEATER_PIN_INDEX && temp > MAXTEMP_START)) return;
+    if (minutes <= 0 || (pin->id - PIN_OFFSET == HEATER_PIN_INDEX && temp > MAXTEMP_START)) {
+        return;
+    }
     PORTD |= (1 << pin->id);
     pin->active = true;
     pin->timer_start = millis();
-    pin->timer_length = minutes > MAX_TIME ? MAX_TIME * MINUTES_TO_MS_FACTOR : minutes * MINUTES_TO_MS_FACTOR;
+    pin->timer_length = minutes * MINUTES_TO_MS_FACTOR;
+}
+
+void turn_on_pin_publish(Pins* pin, uint16_t minutes) {
+    turn_on_pin(pin, minutes);
+    publish_relay_status();
 }
 
 void recv_esp() {
@@ -187,7 +215,9 @@ void recv_esp() {
 
 void command_handler() {
     char* cmd = receive["cmd"];
-    if (!(strcasecmp(cmd, command_list[0]))) return publish_relay_status();
+    if (!(strcasecmp(cmd, command_list[0]))) {
+        return publish_relay_status();
+    }
 
     uint8_t i;
     JsonVariant data = receive["data"];
@@ -197,7 +227,7 @@ void command_handler() {
             if (!strcasecmp(data, "all_off")) {
                 turn_all_off_pins();
             } else {
-                strcpy(print_data_buffer, "Unknown set_relay data, allowed values: [all_off, {\"key_name\":0-n minutes(0 turns off)}]");
+                strcpy(print_data_buffer, "set_relay values: all_off | pin_name:0-n, min(0=off)");
                 print_error_to_esp("warning");
             }
             return;
@@ -208,11 +238,18 @@ void command_handler() {
                     Pins* p = &pins[i];
                     if (!strcasecmp(kv.key().c_str(), p->name)) {
                         missing_keys = false;
-                        uint32_t val = kv.value().as<uint32_t>();
-                        if (val) {
-                            turn_on_pin(p, val);
-                        } else {
+                        int16_t val = kv.value().as<int16_t>();
+                        if (val == -1) {  // Toggle. Default times.
+                            val = p->active ? 0 : (i == 0 ? 10 : 420);
+                        }
+                        if (val == 0) {
                             turn_off_pin(p);
+                        } else if (val > 0) {
+                            turn_on_pin(p, val);
+                        } else {  // Negative value
+                            strcpy(print_data_buffer, "Only -1, 0 and positive numbers allowed for relays");
+                            print_error_to_esp("warning");
+                            return;
                         }
                     }
                 }
@@ -233,7 +270,7 @@ void command_handler() {
             return;
         }
     }
-    strcpy(print_data_buffer, "Unkwn cmd sent, valid cmd: [set_relay[data:{key:0-n}], relay_status]");
+    strcpy(print_data_buffer, "cmd: relay_status | (set_relay:data:{key:0-n} | all_off)");
     print_error_to_esp("warning");
 }
 
@@ -246,7 +283,7 @@ void print_error_to_esp(char* loglevel) {
     snprintf(
         msg_buffer,
         BUFF_SIZE,
-        "{\"cmd\":\"error\",\"data\":{\"detail\":\"%s\",\"log_level\":\"%s\"}",
+        "{\"cmd\":\"error\",\"data\":{\"detail\":\"%s\",\"log_level\":\"%s\"}}",
         print_data_buffer,
         loglevel);
     Serial.println(msg_buffer);
@@ -262,6 +299,7 @@ void setup() {
 void loop() {
     static uint32_t last = 0;
     recv_esp();
+    check_btn();
     // Tick-rate counter.
     if (millis() - last >= SCHEDULER_TICK_MS) {
         last = millis();

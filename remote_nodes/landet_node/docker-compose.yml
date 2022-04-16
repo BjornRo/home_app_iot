@@ -1,25 +1,17 @@
-version: '3.9'
-# Run before ipv6
-# docker network create --ipv6 --subnet=fd00::/64 prodnet
-services:
-  ipv6nat:
-    container_name: ipv6nat
-    restart: always
-    image: robbertkl/ipv6nat:latest
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /lib/modules:/lib/modules:ro
-    privileged: true
-    network_mode: host
+version: "3.9"
 
+services:
   mqtt:
     container_name: mqtt
     restart: unless-stopped
-    build: ./mqtt
     volumes:
-      - ./appdata/mqtt:/data
+      - ./certs/letsencrypt:/certs:ro
+      - ./appdata/passwords:/passwords
     ports:
       - 1883:1883
+      - 8083:8083
+      - 8883:8883
+    build: ./mqtt
 
   sensor_logger:
     container_name: sensor_logger
@@ -32,7 +24,7 @@ services:
       - /sys:/sys
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
-      - ./appdata:/db
+      - ./appdata:/appdata
       - ./pymodules:/app/pymodules
       - ./appdata/certbot/letsencrypt:/etc/letsencrypt/
       - ./sensor_logger:/app
@@ -40,50 +32,60 @@ services:
       - mqtt
     ports:
       - 42660:42660
-      - 42661:42661
-    privileged: true
-    command: python3 main.py --port 42661
+    command: python3 main.py
 
-  mqtt_net_bridge_client:
-    container_name: mqtt_net_bridge_client
+  mqtt_bridge_client:
+    container_name: mqtt_bridge_client
     restart: unless-stopped
     build:
-      context: ./mqtt_net_bridge_client
-      dockerfile: mqtt_net_bridge_client.dockerfile
+      context: ./mqtt_bridge_client
+      dockerfile: mqtt_bridge_client.dockerfile
     env_file: .env
     volumes:
-      - ./appdata:/db
       - ./pymodules:/app/pymodules
-      - ./appdata/certbot/letsencrypt:/etc/letsencrypt/
-      - ./mqtt_net_bridge_client:/app
+      - ./mqtt_bridge_client:/app
     depends_on:
       - mqtt
-    privileged: true
-    command: python3 main.py --port 42668 --debug
+    command: python3 main.py --port 42668
 
-  # ddns:
-  #   container_name: ddns
-  #   build:
-  #     context: ./ddns
-  #     dockerfile: ddns.dockerfile
-  #   env_file: .env
-  #   restart: unless-stopped
-  #   command: python3 main.py wlan0 --hrs 2
-  #   network_mode: host
+  ntp_server:
+    container_name: ntp_server
+    build:
+      context: ./ntp_server
+      dockerfile: ntp_server.dockerfile
+    volumes:
+      - ./ntp_server:/app
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    ports:
+      - 123:123/udp
+    restart: unless-stopped
+    command: python3 main.py
+
+  ddns:
+    container_name: ddns
+    build:
+      context: ./ddns
+      dockerfile: ddns.dockerfile
+    env_file: .env
+    volumes:
+      - ./ddns:/app
+    restart: unless-stopped
+    command: python3 main.py --hrs 1
+    network_mode: host
 
   # certbot:
-  #   image: certbot/certbot:arm32v6-latest
   #   container_name: certbot
-  #   restart: unless-stopped
-  #   ports:
-  #     - 80:80
+  #   image: certbot/certbot:arm32v6-latest
   #   volumes:
-  #     - ./appdata/certbot/letsencrypt:/etc/letsencrypt
-  #     - ./appdata/certbot/www:/var/www/certbot
-  #   entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew -n ; sleep 24h & wait $${!}; done;'"
-
-# networks:
-#   prodnet:
-#     external: true
-# networks:
-#   - prodnet
+  #     - ./certs/letsencrypt:/etc/letsencrypt
+  #   restart: unless-stopped
+  #   entrypoint: >
+  #     /bin/sh
+  #     -c
+  #     'trap exit TERM;
+  #     while :;
+  #     do certbot renew --noninteractive --standalone --quiet;
+  #     chmod -R 777 /etc/letsencrypt/;
+  #     sleep 12h & wait $${!};
+  #     done;'

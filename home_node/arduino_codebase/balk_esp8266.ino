@@ -5,12 +5,12 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <WiFiClientSecureBearSSL.h>
-#include <cfg.h>
+#include <my_cfg.h>
 
 #define LED_BOARD 1  // pins_arduino.h says 1. Pinout says 0.
 
-#define SSID _ssid
-#define PASS _pass
+#define SSID _wssid
+#define PASS _wpass
 #define PORT _port
 #define BROKER _broker
 #define MQTT_USER _name
@@ -21,7 +21,7 @@
 #define SUB_RELAY_CMD _default_path "relay"
 
 // Buffers
-#define BUFF_SIZE 128
+#define BUFF_SIZE 192
 
 // WIFI, MQTT
 // WiFiClientSecure wifi
@@ -47,7 +47,7 @@ void recv_arduino() {
                 publish_error(error, "info", "Invalid json from arduino: ");
                 return;
             }
-            publish_arduino();
+            from_arduino_to_mqtt();
             return;
         } else if (i < BUFF_SIZE) {
             buffer[i] = r;
@@ -56,7 +56,7 @@ void recv_arduino() {
     }
 }
 
-void publish_arduino() {
+void from_arduino_to_mqtt() {
     const char* cmd = json_buff["cmd"];
     JsonObject data = json_buff["data"];
     if (!strcasecmp(cmd, "error")) {
@@ -66,8 +66,8 @@ void publish_arduino() {
         return;
     }
     serializeJson(data, msg_buff);
-    if (!strcasecmp(cmd, "relay_status")) {
-        mqtt.publish(PUB_RELAY_STATUS, msg_buff);
+    if (!strcasecmp(cmd, "relay")) {
+        mqtt.publish(PUB_RELAY_STATUS, msg_buff, 1);
     } else if (!strcasecmp(cmd, "sensor")) {
         mqtt.publish(PUBLISH_DATA, msg_buff);
     }
@@ -120,21 +120,20 @@ void setup() {
 }
 
 void _reconnect() {
-    static uint16_t attempts = 0;
     while (!mqtt.connected()) {
-        if (!attempts) {
-            getTime();
-        }
+        getTime();
         if (mqtt.connect(MQTT_ID, MQTT_USER, MQTT_PASS)) {
             mqtt.publish("void", MQTT_USER);
             mqtt.subscribe(SUB_RELAY_CMD, 1);
-            while (Serial.available()) Serial.read();
-            Serial.println(F("{\"cmd\":\"relay_status\"}"));
-        } else {
-            attempts++;
-            if (attempts >= 17280) {
-                attempts = 0;
+            delay(100);
+            Serial.println("!");  // Invalid command to clear buffer.
+            delay(60);
+            while (Serial.available()) {
+                delayMicroseconds(250);
+                Serial.read();
             }
+            Serial.println("{\"cmd\":\"relay_status\"}");
+        } else {
             delay(5000);
         }
     }

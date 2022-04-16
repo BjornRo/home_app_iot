@@ -1,7 +1,6 @@
-paho_mqtt
-asyncio-mqtt
-python-binary-memcached
+aiocron
 aiofiles
 aiohttp
+aiosqlite
+asyncio-mqtt
 ujson
-aiotinydb

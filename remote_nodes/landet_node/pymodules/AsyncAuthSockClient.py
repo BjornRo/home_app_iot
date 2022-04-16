@@ -26,7 +26,7 @@ class AsyncAuthSockClient:
     ) -> None:
         self.ip = ip
         self.port = port
-        self.usrname = credentials.split(b"\n")[0]
+        self.usrname = credentials.split(b"\n")[0].decode()
         self.login_credentials = credentials  # b"user\npass
         self.header_len = header_len
         self.max_msg_size = max_msg_size
@@ -327,7 +327,7 @@ class AASCStateConnected(AASCStateABC):
             asyncio.create_task(next_state.connect())
 
     async def close(self):
-        if not self._closing:
+        if self._closing:
             return True
 
         self._closing = True

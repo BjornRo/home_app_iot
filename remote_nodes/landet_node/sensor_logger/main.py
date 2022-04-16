@@ -1,98 +1,97 @@
+import aiocron
+import aiosqlite
 import asyncio
-import logging
 import os
 import ssl
-import ujson
-import zlib
+import sqlite3
+import ujson as json
 from aiofiles import open as async_open
 from aiohttp import web
-from asyncio_mqtt import Client
+from asyncio_mqtt import Client as MQTTClient, ProtocolVersion
 from contextlib import suppress
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from glob import glob
 from paho.mqtt.client import MQTTMessage
-from pymodules import misc, AsyncAuthSockClient as AASC
-from time import sleep
+from pymodules import misc
+from typing import Any
 
-fileargs = misc.get_arg_namespace()
-
-# Polling time for data.
-QUERY_DELTA_MIN = 30
-
-# Socket related.
-HOME_ADDR = os.environ["HOME_ADDR"]
+tz = timezone.utc
+timenow = lambda: datetime.utcnow().isoformat(timespec="minutes")
 
 # Device credentials
-NAME = os.environ["NAME"]
-PASS = os.environ["PASS"]
-LOGIN_CREDENTIALS = NAME.encode() + b"\n" + PASS.encode()
+location_name = os.environ["NAME"]
+mqtt_name = os.environ["MQTT_USER"]
+passw = os.environ["HTTP_PW"]
+
+# DB
+db_path = "/appdata/"
+db_file = os.environ["NAME"] + ".db"
+db_filepath = db_path + db_file
 
 # MQTT
-MQTT_SUBS = ["pizw/temp", "hydrofor/temphumidpress"]
+mqtt_subs = ["hydrofor/sensor/data"]
+mqtt_pub = f"{location_name}/{mqtt_name}/sensor/data"
 
-# Ports, change in compose file instead.
-HTTP_PORT = 42660
-SOCK_SERVER_PORT = fileargs.port  # Can be whatever port.
+http_port = 42660
 
 # SSL Context
-SSLPATH = f'/etc/letsencrypt/live/{os.environ["HOSTNAME"]}/'
-SSLPATH_TUPLE = (SSLPATH + "fullchain.pem", SSLPATH + "privkey.pem")
+ssl_path = f'/etc/letsencrypt/live/{os.environ["HOST"]}/'
+ssl_path_tuple = (ssl_path + "fullchain.pem", ssl_path + "privkey.pem")
 context = ssl.SSLContext(ssl.PROTOCOL_TLS)
-context.load_cert_chain(*SSLPATH_TUPLE)
+context.load_cert_chain(*ssl_path_tuple)
+
+mqtt_client: None | MQTTClient = None
 
 
 def main():
-    # Find the device file to read from.
-    file_addr = glob("/sys/bus/w1/devices/28*")[0] + "/w1_slave"
+    global loop
+    if not os.path.isfile(db_filepath):
+        db = sqlite3.connect(db_filepath)
+        db.execute("CREATE TABLE snapshots (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        db.commit()
+        db.close()
+        del db
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     while 1:
-        # Datastructure is in the form of:
-        #  devicename/measurements: for each measurement type: value.
-        # New value is a flag to know if value has been updated since last SQL-query. -> Each :00, :30
         tmpdata = {
-            "pizw": {"temperature": -99},
+            mqtt_name: {"temperature": -99, "time": datetime.min, "new": False},
             "hydrofor": {
                 "temperature": -99,
                 "humidity": -99,
                 "airpressure": -99,
+                "time": datetime.min,
+                "new": False,
             },
         }
-        new_values = {key: False for key in tmpdata}  # For DB-query
-        last_update = {key: None for key in tmpdata}  # For main node to know when sample was taken.
-
-        # asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())¨
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
 
         with suppress(Exception):
-            loop.create_task(low_lvl_http([tmpdata, last_update]))
-            loop.create_task(socket_server([tmpdata, last_update]))
-            loop.create_task(mqtt_remote_send(tmpdata, new_values, last_update))
-            loop.create_task(insert_db_task(tmpdata, new_values))
-            loop.create_task(read_temp(file_addr, tmpdata, new_values, "pizw/temp", last_update))
-            loop.create_task(reload_ssl())
+            loop.create_task(low_lvl_http(tmpdata))
+            loop.create_task(mqtt_listener(tmpdata))
             loop.run_forever()
-
         loop.close()
+
+        from time import sleep
+
         sleep(20)
 
 
-# Simple server to get data with HTTP. Trial to eventually replace memcachier.
-async def low_lvl_http(tmpdata_last_update):
+async def low_lvl_http(tmpdata):
     async def handler(request: web.BaseRequest):
         with suppress(Exception):
             webpath = [i.lower() for i in request.path[1:].split("/")]
             if "status" == webpath[0]:
-                return web.json_response(tmpdata_last_update)
-            # Can't decide on query vs sending the file. Just have both ready for usage.
+                return web.json_response(tmpdata)
             if len(webpath) >= 3:
-                if NAME == webpath[0] and PASS == webpath[1]:
-                    match webpath[2]:
+                if mqtt_name == webpath[0] and passw == webpath[1]:
+                    match webpath[2].lower():
                         case "file":
                             return web.Response(
-                                body=await misc.get_filebytes(misc.DB_FILE, misc.DB_PATH),
+                                body=await misc.get_filebytes(db_file, db_path),
                                 content_type="application/octet-stream",
                                 headers={
-                                    "Content-Disposition": f"attachment; filename={misc.DB_FILE.split('.')[0]}.tar.gz"
+                                    "Content-Disposition": f"attachment; filename={db_file.split('.')[0]}.tar.gz"
                                 },
                             )
                 return web.Response(status=401)
@@ -100,138 +99,97 @@ async def low_lvl_http(tmpdata_last_update):
 
     runner = web.ServerRunner(web.Server(handler))
     await runner.setup()
-    await web.TCPSite(runner, None, HTTP_PORT, ssl_context=context).start()
+    await web.TCPSite(runner, None, http_port, ssl_context=context).start()
 
 
-async def socket_server(full_tmpdata: list):
-    async def recv(reader: asyncio.StreamReader) -> str:
-        header = int.from_bytes(await asyncio.wait_for(reader.readexactly(3), timeout=4), "big")
-        return (await asyncio.wait_for(reader.readexactly(header), timeout=4)).decode()
+async def mqtt_listener(tmpdata: dict):
+    global mqtt_client
 
-    async def send(writer: asyncio.StreamWriter, data: bytes, compress=False) -> None:
-        if compress:
-            data = zlib.compress(data, level=9)
-        writer.write(len(data).to_bytes(3, "big") + data)
-        await writer.drain()
-
-    async def c_handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-        with suppress(Exception):
-            if LOGIN_CREDENTIALS.decode() == await recv(reader):
-                await send(writer, b"OK")
-                match (await recv(reader)).lower():
-                    case "status":
-                        await send(writer, ujson.dumps(full_tmpdata).encode(), compress=True)
-                    case "database":
-                        await send(writer, ujson.dumps(await misc.get_db()).encode(), compress=True)
-                    case "dbfile":
-                        res = await misc.get_filebytes(misc.DB_FILE, misc.DB_PATH)
-                        if res is not None:
-                            await send(writer, res)
-                    case "file":
-                        # 4file13database.json
-                        filename = await recv(reader)
-                        res = await misc.get_filebytes(filename, misc.DB_PATH)
-                        if res is not None:
-                            await send(writer, res)
-                        else:
-                            await send(writer, b"KO")
-                    case _:
-                        await send(writer, b"KO")
-        with suppress(Exception):
-            writer.close()
-            await writer.wait_closed()
-
-    srv = await asyncio.start_server(c_handle, None, SOCK_SERVER_PORT, ssl=context, ssl_handshake_timeout=2)
-    async with srv:
-        await srv.serve_forever()
-
-
-async def mqtt_remote_send(tmpdata: dict, new_values: dict, last_update: dict):
     async def on_message(message: MQTTMessage):
-        payload: dict[str, float] = ujson.loads(message.payload)
-        # Handle the topic depending on what it is about.
-        device = message.topic.replace(NAME + "/", "").split("/")[0].lower()
+        payload: dict[str, float] = json.loads(message.payload)
+
+        device = message.topic.split("/")[1]
 
         for key, value in payload.items():
-            # If a device sends bad data break and don't set flag as newer value.
             if not misc.test_value(key, value):
                 break
-            tmpdata[device][key.lower()] = value
+            tmpdata[device][key] = value
         else:
-            new_values[device] = True
-            last_update[device] = datetime.utcnow().isoformat()
-            data = ujson.dumps([device, tmpdata[device]]).encode()
-            asyncio.create_task(home.send(data))
-
-    # This client only sends data. MQTT -> Receiver
-    home = AASC.AsyncAuthSockClient(HOME_ADDR, fileargs.port, LOGIN_CREDENTIALS, auto_reconnect=True)
-    asyncio.create_task(home.connect())
+            tmpdata[device]["new"] = True
+            tmpdata[device]["time"] = datetime.utcnow()
 
     mqtt_settings = {
-        "hostname": "mqtt.lan",
+        "hostname": os.environ["HOST"],
+        "port": 8883,
         "client_id": os.environ["MQTT_USER"] + "_unit",
         "username": os.environ["MQTT_USER"],
         "password": os.environ["MQTT_PASS"],
+        "tls_context": ssl.create_default_context(),
+        "protocol": ProtocolVersion.V31,
     }
     while 1:
         with suppress(Exception):
-            async with Client(**mqtt_settings) as client:
-                for topic in MQTT_SUBS:
-                    await client.subscribe(NAME + "/" + topic)
+            async with MQTTClient(**mqtt_settings) as client:
+                mqtt_client = client
+                for topic in mqtt_subs:
+                    await client.subscribe(f"{location_name}/{topic}")
+                await client.publish("void", mqtt_name)
                 async with client.unfiltered_messages() as messages:
                     async for message in messages:
                         await on_message(message)
+        mqtt_client = None
         await asyncio.sleep(5)
 
 
-async def insert_db_task(tmpdata: dict, new_values: dict):
-    while 1:
-        logging.debug("Inserting data to db...")
-        dt = datetime.utcnow()
-        # This will always get next 30minutes. If time is 00:00, then 00:30...
-        nt = dt.replace(second=0, microsecond=0) + timedelta(minutes=(30 - dt.minute - 1) % 30 + 1)
-        await asyncio.sleep((nt - dt).total_seconds())
-        # If timer gone too fast and there are seconds left, wait the remaining time, else continue.
-        if (remain := (nt - datetime.now()).total_seconds()) > 0:
-            logging.warning("DB-timer gone too fast")  # Maybe too careful. Lets log it and see!
-            await asyncio.sleep(remain)
-        if not any(new_values.values()):
-            continue
-        with suppress(Exception):
-            tmpdict = {}
-            for key, value in new_values.items():
-                if value:
-                    new_values[key] = False
-                    tmpdict[key] = tmpdata[key].copy()
-            await misc.insert_db({nt.isoformat(timespec="minutes"): tmpdict})
+@aiocron.crontab("*/30 * * * *", tz=tz)
+async def insert_db_task(tmpdata: dict[str, dict[str, Any]]):
+    with suppress(Exception):
+        new_data = []
+        for device_name, data_dict in tmpdata.items():
+            item = data_dict.copy()
+            data_dict["new"] = False
+            if item.pop("new"):
+                del item["time"]
+                new_data.append({"location": location_name, "name": device_name, **item})
+
+        async with aiosqlite.connect(db_filepath) as db:
+            await db.execute(
+                "INSERT INTO snapshots VALUES (?, ?)",
+                (timenow(), json.dumps(new_data)),
+            )
+            await db.commit()
 
 
-async def read_temp(file_addr: str, tmpdata: dict, new_values: dict, topic: str, last_update: dict):
-    while 1:
-        found = False
-        with suppress(Exception):
-            async with async_open(file_addr, "r") as f:
-                async for line in f:
-                    line = line.strip()
-                    if not found and line[-3:].lower() == "yes":
-                        found = True
-                        continue
-                    elif found and (eq_pos := line.find("t=")) != -1:
-                        if (tmp_val := line[eq_pos + 2 :]).isdigit():
-                            conv_val = float(tmp_val) / 1000  # 28785 -> 28.785
-                            if misc.test_value("temperature", conv_val):
-                                logging.debug("Temperature read: " + str(conv_val))
-                                tmpdata[topic]["temperature"] = conv_val
-                                new_values[topic] = True
-                                last_update[topic] = datetime.utcnow().isoformat()
-                    break
-        await asyncio.sleep(4)
+@aiocron.crontab("* * * * * */5", tz=tz)
+async def read_temp(tmpdata: dict):
+    file_addr = glob("/sys/bus/w1/devices/28*")[0] + "/w1_slave"
+    found = False
+    with suppress(Exception):
+        async with async_open(file_addr, "r") as f:
+            async for line in f:
+                line = line.strip()
+                if not found and line[-3:].lower() == "yes":
+                    found = True
+                    continue
+                elif found and (eq_pos := line.find("t=")) != -1:
+                    if not (tmp_val := line[eq_pos + 2 :]).isdigit():
+                        return
+
+                    val = float(tmp_val) / 1000  # 28785 -> 28.785
+                    if not misc.test_value("temperature", val):
+                        return
+
+                    tmpdata[mqtt_name]["temperature"] = val
+                    tmpdata[mqtt_name]["new"] = True
+                    tmpdata[mqtt_name]["time"] = datetime.utcnow()
+                    if mqtt_client is None:
+                        return
+                    await mqtt_client.publish(mqtt_pub, json.dumps({"temperature": val}), qos=1)
 
 
-async def reload_ssl(seconds=86400):
-    while 1:
-        await asyncio.sleep(seconds)
-        context.load_cert_chain(*SSLPATH_TUPLE)
+@aiocron.crontab("0 0 * * *", tz=tz)
+async def reload_ssl():
+    context.load_cert_chain(*ssl_path_tuple)
 
 
 if __name__ == "__main__":

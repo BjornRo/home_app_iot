@@ -1,4 +1,4 @@
-paho_mqtt
+aiofiles
 asyncio-mqtt
-ujson
 pydantic
+ujson
